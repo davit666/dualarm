@@ -1,3 +1,0 @@
-type,loop num,success num,fail num,step when succ,robot 1 succ,robot 2 succ,robot 1 me,robot 2 me
-random,10,8,1,188,9,8,0,0
-bar,10,10,0,200,10,10,0,0

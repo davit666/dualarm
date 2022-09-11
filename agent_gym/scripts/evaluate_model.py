@@ -8,7 +8,7 @@ import numpy as np
 import time
 import csv
 from gym_envs.Env_gr import Env_gr
-from gym_envs.Env_asynchronous_gr import Env_asynchronous_gr
+# from gym_envs.Env_asynchronous_gr import Env_asynchronous_gr
 
 # from stable_baselines3.common.policies import MlpPolicy
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
@@ -32,9 +32,9 @@ def make_env(env_config, env_name, renders=False, reward_type=None, obs_type=Non
             else:
                 env = Env_gr(env_config, renders=renders, reward_type=reward_type, obs_type=obs_type,
                              action_type=action_type)
-        elif env_name == "rearrangement":
-            env = Env_rearrangement(env_config, renders=renders, reward_type=reward_type, obs_type=obs_type,
-                                    action_type=action_type)
+        # elif env_name == "rearrangement":
+        #     env = Env_rearrangement(env_config, renders=renders, reward_type=reward_type, obs_type=obs_type,
+        #                             action_type=action_type)
         else:
             return None
         return env

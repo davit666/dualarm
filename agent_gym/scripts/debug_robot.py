@@ -18,7 +18,7 @@ import pybullet as p
 import os, inspect
 import time
 from gym_envs.Env_gr import Env_gr
-from gym_envs.Env_asynchronous_gr import Env_asynchronous_gr
+# from gym_envs.Env_asynchronous_gr import Env_asynchronous_gr
 from gym_envs.Env_gr_dict import Env_gr_dict
 # from gym_envs.Env_rearrangement import Env_rearrangement
 from gym_envs.Env_tasks import Mode, Env_tasks

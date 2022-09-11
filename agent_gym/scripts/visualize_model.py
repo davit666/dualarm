@@ -6,7 +6,7 @@ os.sys.path.insert(0, parentdir)
 import pybullet as p
 import time
 from gym_envs.Env_gr import Env_gr
-from gym_envs.Env_asynchronous_gr import Env_asynchronous_gr
+# from gym_envs.Env_asynchronous_gr import Env_asynchronous_gr
 
 
 # from stable_baselines3.common.policies import MlpPolicy
@@ -57,8 +57,8 @@ if __name__ == '__main__':
     env_name = train_config['env_name']
     if env_name == "goal_reaching":
         env = Env_gr(env_config,renders=render, evaluate = False, showBallMarkers = False, reward_type = reward_type, obs_type = obs_type,action_type=action_type,maxSteps=500,use_plot=False)
-    elif env_name == "asynchronous_goal_reaching":
-        env = Env_asynchronous_gr(env_config, renders=render, reward_type=reward_type, obs_type=obs_type,action_type=action_type)
+    # elif env_name == "asynchronous_goal_reaching":
+    #     env = Env_asynchronous_gr(env_config, renders=render, reward_type=reward_type, obs_type=obs_type,action_type=action_type)
     else:
         env = None
 

@@ -83,6 +83,7 @@ class Env_gr(gym.GoalEnv):
         self._fill_triangle = env_config['fill_triangle']
         self._normalize_pose = env_config['normalize_pose']
         self.move_with_obj = env_config['move_with_obj'] #False if self._in_task else env_config['move_with_obj']
+        self.fixed_obj_shape = env_config['fixed_obj_shape']
         self.obj_shape_type = env_config['obj_shape_type']
         self._sequence_task = env_config['sequence_task'] or self._evaluate
         if self._sequence_task:
@@ -201,22 +202,23 @@ class Env_gr(gym.GoalEnv):
         for i in range(len(self.robots)):
             self._part1 = Part(useInverseKinematics=self._useInverseKinematics, type='b')
             self.parts.append(self._part1)
-            self._part2 = Part(useInverseKinematics=self._useInverseKinematics, type='b2')
-            self.parts.append(self._part2)
-            self._part3 = Part(useInverseKinematics=self._useInverseKinematics, type='b3')
-            self.parts.append(self._part3)
-            self._part4 = Part(useInverseKinematics=self._useInverseKinematics, type='b4')
-            self.parts.append(self._part4)
-            self._part5 = Part(useInverseKinematics=self._useInverseKinematics, type='b5')
-            self.parts.append(self._part5)
-            self._part6 = Part(useInverseKinematics=self._useInverseKinematics, type='b6')
-            self.parts.append(self._part6)
-            self._part7 = Part(useInverseKinematics=self._useInverseKinematics, type='c1')
-            self.parts.append(self._part7)
-            self._part8 = Part(useInverseKinematics=self._useInverseKinematics, type='s1')
-            self.parts.append(self._part8)
-            # self._part9 = Part(useInverseKinematics=self._useInverseKinematics, type='t')
-            # self.parts.append(self._part9)
+            if not self.fixed_obj_shape:
+                self._part2 = Part(useInverseKinematics=self._useInverseKinematics, type='b2')
+                self.parts.append(self._part2)
+                self._part3 = Part(useInverseKinematics=self._useInverseKinematics, type='b3')
+                self.parts.append(self._part3)
+                self._part4 = Part(useInverseKinematics=self._useInverseKinematics, type='b4')
+                self.parts.append(self._part4)
+                self._part5 = Part(useInverseKinematics=self._useInverseKinematics, type='b5')
+                self.parts.append(self._part5)
+                self._part6 = Part(useInverseKinematics=self._useInverseKinematics, type='b6')
+                self.parts.append(self._part6)
+                self._part7 = Part(useInverseKinematics=self._useInverseKinematics, type='c1')
+                self.parts.append(self._part7)
+                self._part8 = Part(useInverseKinematics=self._useInverseKinematics, type='s1')
+                self.parts.append(self._part8)
+                self._part9 = Part(useInverseKinematics=self._useInverseKinematics, type='t')
+                self.parts.append(self._part9)
 
         assert len(self.parts)<= 18, "no more space to place parts"
 
@@ -832,7 +834,7 @@ class Env_gr(gym.GoalEnv):
             robot.goal_JS_pos = robot.getObservation_JS()
         goal_failed = False
         for robot in self.robots:
-            coll, _ = robot.check_collision(collision_distance=self.safety_dist_threshold)
+            coll, _ = robot.check_collision(collision_distance=0.2)
             goal_failed = goal_failed or coll
         if goal_failed:
             if self._renders:
@@ -844,7 +846,7 @@ class Env_gr(gym.GoalEnv):
             robot.init_JS_pos = robot.getObservation_JS()
         init_failed = False
         for robot in self.robots:
-            coll, _ = robot.check_collision(collision_distance=self.safety_dist_threshold)
+            coll, _ = robot.check_collision(collision_distance=0.2)
             init_failed = init_failed or coll
         if init_failed:
             if self._renders:
@@ -1138,7 +1140,9 @@ class Env_gr(gym.GoalEnv):
             for i in range(self.robots_num):
                 robot = self.robots[i]
 
-                if self.obj_shape_type == "random":
+                if self.fixed_obj_shape:
+                    j = 0
+                elif self.obj_shape_type == "random":
                     j = random.randint(0,self.parts_num//2-1)
                 elif self.obj_shape_type == "bar":
                     j = 1

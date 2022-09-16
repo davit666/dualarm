@@ -92,10 +92,10 @@ if __name__ == "__main__":
         # # print("reward:\t", reward)
         # # print("state info:")
         # # print(env.obs_info)
-        time.sleep(0.1)
+        # time.sleep(0.1)
 
 
         if done:
             print("info:\t", info)
-            time.sleep(10)
+            time.sleep(1)
             env.reset()

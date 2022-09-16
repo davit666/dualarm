@@ -38,8 +38,8 @@ class TrainConfig:
     custom_network = False
     dict_obs = False
 
-    model_date = env_name + "/monitoring/0829_ee/random8_bb_obs/"
-    model_name = "actor_64_16cpu_lr_const_1e-3_ratio_weight_1_coll_dist_0.05_keep_bonus_when_success/"
+    model_date = env_name + "/monitoring/0916_ee/best_policy/"
+    model_name = "actor_64_32cpu_lr_const_1e-3_ratio_weight_1_coll_dist_0.05_keep_bonus_when_success/"
     alg_name = "PPO"
     reward_type = "delta_dist_field_with_sparse_reward"#"negative_dist_field_with_sparse_reward" #"delta_dist_&_overlap_area_ratio_with_sparse_reward"  #"delta_dist_&_cutting_area_ratio_with_sparse_reward" #
     obs_type = "common_obs_with_obj_bb"#"common_obs" # "common_obs_with_links_dist"  #"obs_with_triangle_features"  #
@@ -51,16 +51,16 @@ class TrainConfig:
     model_save_freq = 1e6
 
     ######## cpu ########
-    num_cpu = 16
+    num_cpu = 32
     ######## lr scheduler ########
     use_lr_scheduler = True
     ######## parameter ########
     learning_rate = 1e-3
     n_steps = 2048
-    batch_size = 512
+    batch_size = 2048
     n_epochs = 10
 
-    total_timesteps = 1e8
+    total_timesteps = 3e8
 
 
 class EnvConfig:
@@ -71,7 +71,8 @@ class EnvConfig:
 
     #key status
     move_with_obj = True
-    obj_shape_type = "random" # "random" #
+    fixed_obj_shape = True
+    obj_shape_type = "box" # "random" #
     keep_bonus_when_success = True
     stepback_if_collide = False
 
@@ -169,6 +170,7 @@ def load_config():
     env_config['normalize_pose'] = E.normalize_pose
 
     env_config['move_with_obj'] = E.move_with_obj
+    env_config['fixed_obj_shape'] = E.fixed_obj_shape
     env_config['obj_shape_type'] = E.obj_shape_type
     env_config['keep_bonus_when_success'] = E.keep_bonus_when_success
     env_config['stepback_if_collide'] = E.stepback_if_collide

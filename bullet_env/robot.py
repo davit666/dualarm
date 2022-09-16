@@ -161,7 +161,6 @@ class Robot:
         self.placing_count = 0
         self.task_idx_allocated = -1
 
-
         # js = self.getObservation_JS()
         # ee = self.getObservation_EE()
 
@@ -179,11 +178,10 @@ class Robot:
         else:
             self.goal_EE_pos = self.sample_EE_pose(self.goal_state)
             if self.item_picking is not None:
-                delta_h = max(self.item_picking.part_size[2] - 0.05,0)
+                delta_h = max(self.item_picking.part_size[2] - 0.05, 0)
                 self.goal_EE_pos[2] += delta_h
             self.goal = np.concatenate((self.goal_EE_pos[:3], p.getEulerFromQuaternion(self.goal_EE_pos[3:])[
                                                               -1:])) if self.useInverseKinematics else self.goal_EE_pos
-
 
         return self.goal
 
@@ -227,7 +225,7 @@ class Robot:
             return 4
         return 6
 
-    def applyAction(self, motorCommands, use_reset = False):
+    def applyAction(self, motorCommands, use_reset=False):
         if len(motorCommands) != self.getActionDimension():
             # print(motorCommands)
             # print(self.getActionDimension())
@@ -269,7 +267,7 @@ class Robot:
                 commands_JS = [self.jointsStates[i] + motorCommands[i] for i in range(len(self.jointsStates))]
                 self.initialize_by_JS_pose(commands_JS)
 
-    def calculStraightAction2Goal(self, goal, type="ee", commands_scale = None):
+    def calculStraightAction2Goal(self, goal, type="ee", commands_scale=None):
         commands_scale = commands_scale if commands_scale is not None else self.default_commands_scale
         if type == "js":
             curr_js = self.getObservation_JS()
@@ -336,6 +334,9 @@ class Robot:
                 self.init_jointStates[i] += 0.2 * (np.random.random() - 0.5)
 
     def sample_EE_pose(self, state):
+        if state == 1 and np.random.random() < 0.5:
+            state = 2
+
         if state == 1:
             posx = np.random.sample() * (self.robot_config.init_pos1_x[1] - self.robot_config.init_pos1_x[0]) + \
                    self.robot_config.init_pos1_x[0]
@@ -352,7 +353,7 @@ class Robot:
                    self.robot_config.init_pos2_z[0]
         r0 = 0  # np.random.sample() * 0.2 - 0.1
         p0 = 0  # np.random.sample() * 0.2 - 0.1
-        y0 = np.random.sample() * math.pi / 2 #- math.pi / 4
+        y0 = np.random.sample() * math.pi / 2  # - math.pi / 4
 
         pos = [posx, posy, posz]
         rpy = np.array([r0, p0, y0])
@@ -366,6 +367,7 @@ class Robot:
         # print(self.init_jointStates)
         self.initialize_item()
         return True
+
     def reset_by_JS_pose(self, js):
         js = np.concatenate([js])
         for i in range(self.numJoints):
@@ -376,7 +378,7 @@ class Robot:
     def initialize_by_EE_pose(self, target_pos):
         EE_pos = target_pos[:3]
         if self.useInverseKinematics:
-            EE_orn = p.getQuaternionFromEuler([0,0,EE_pos[-1]])
+            EE_orn = p.getQuaternionFromEuler([0, 0, EE_pos[-1]])
         else:
             EE_orn = target_pos[3:]
 
@@ -403,7 +405,7 @@ class Robot:
     def reset_by_EE_pose(self, target_pos):
         EE_pos = target_pos[:3]
         if self.useInverseKinematics:
-            EE_orn = p.getQuaternionFromEuler([0,0,EE_pos[-1]])
+            EE_orn = p.getQuaternionFromEuler([0, 0, EE_pos[-1]])
         else:
             EE_orn = target_pos[3:]
 
@@ -436,6 +438,7 @@ class Robot:
             else:
                 orn = ee[3:]
             item.resetInitPose(pos, orn, reset_by_ee_pose=True)
+
     #### collision detection ####
     def update_closest_points(self):
         others_id = [p.getBodyUniqueId(i)

@@ -35,11 +35,11 @@ class KAWASAKI():
 
     init_pos1_x = [-1,1]
     init_pos1_y = [-0.5,1.]
-    init_pos1_z = [0.4,1.4]
+    init_pos1_z = [0.5,1]
 
 
     init_pos2_x = [-0.75,0.75]
     init_pos2_y = [-0.5,0.75]
-    init_pos2_z = [0.45,0.6]
+    init_pos2_z = [0.55,0.6]
 
     default_ee_pose = [sum(init_pos2_x)/2, init_pos2_y[1], init_pos2_z[1], 0, 0, 0, 1]

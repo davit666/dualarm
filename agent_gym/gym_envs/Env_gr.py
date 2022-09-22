@@ -82,7 +82,7 @@ class Env_gr(gym.GoalEnv):
         self._keep_bonus_when_success = env_config['keep_bonus_when_success']
         self._fill_triangle = env_config['fill_triangle']
         self._normalize_pose = env_config['normalize_pose']
-        self.move_with_obj = env_config['move_with_obj'] #False if self._in_task else env_config['move_with_obj']
+        self.move_with_obj = False if self._in_task else env_config['move_with_obj']
         self.fixed_obj_shape = env_config['fixed_obj_shape']
         self.obj_shape_type = env_config['obj_shape_type']
         self._sequence_task = env_config['sequence_task'] or self._evaluate
@@ -199,37 +199,38 @@ class Env_gr(gym.GoalEnv):
 
         ######## load items
         self.parts = []
-        for i in range(len(self.robots)):
-            self._part1 = Part(useInverseKinematics=self._useInverseKinematics, type='b')
-            self.parts.append(self._part1)
-            if not self.fixed_obj_shape:
-                self._part2 = Part(useInverseKinematics=self._useInverseKinematics, type='b2')
-                self.parts.append(self._part2)
-                self._part3 = Part(useInverseKinematics=self._useInverseKinematics, type='b3')
-                self.parts.append(self._part3)
-                self._part4 = Part(useInverseKinematics=self._useInverseKinematics, type='b4')
-                self.parts.append(self._part4)
-                self._part5 = Part(useInverseKinematics=self._useInverseKinematics, type='b5')
-                self.parts.append(self._part5)
-                self._part6 = Part(useInverseKinematics=self._useInverseKinematics, type='b6')
-                self.parts.append(self._part6)
-                self._part7 = Part(useInverseKinematics=self._useInverseKinematics, type='c1')
-                self.parts.append(self._part7)
-                self._part8 = Part(useInverseKinematics=self._useInverseKinematics, type='s1')
-                self.parts.append(self._part8)
-                self._part9 = Part(useInverseKinematics=self._useInverseKinematics, type='t')
-                self.parts.append(self._part9)
+        if self.move_with_obj:
+            for i in range(len(self.robots)):
+                self._part1 = Part(useInverseKinematics=self._useInverseKinematics, type='b')
+                self.parts.append(self._part1)
+                if not self.fixed_obj_shape:
+                    self._part2 = Part(useInverseKinematics=self._useInverseKinematics, type='b2')
+                    self.parts.append(self._part2)
+                    self._part3 = Part(useInverseKinematics=self._useInverseKinematics, type='b3')
+                    self.parts.append(self._part3)
+                    self._part4 = Part(useInverseKinematics=self._useInverseKinematics, type='b4')
+                    self.parts.append(self._part4)
+                    self._part5 = Part(useInverseKinematics=self._useInverseKinematics, type='b5')
+                    self.parts.append(self._part5)
+                    self._part6 = Part(useInverseKinematics=self._useInverseKinematics, type='b6')
+                    self.parts.append(self._part6)
+                    self._part7 = Part(useInverseKinematics=self._useInverseKinematics, type='c1')
+                    self.parts.append(self._part7)
+                    self._part8 = Part(useInverseKinematics=self._useInverseKinematics, type='s1')
+                    self.parts.append(self._part8)
+                    self._part9 = Part(useInverseKinematics=self._useInverseKinematics, type='t')
+                    self.parts.append(self._part9)
 
-        assert len(self.parts)<= 18, "no more space to place parts"
+            assert len(self.parts) <= 18, "no more space to place parts"
 
         ######## parameters
         self.robots_num = len(self.robots)
         self.parts_num = len(self.parts)
         self.env_step_counter = 0
 
-        # reset parts position
-        self.release_all_parts()
-
+        # # reset parts position
+        # if self.move_with_obj:
+        #     self.release_all_parts()
 
         p.stepSimulation()
         if self._use_plot:
@@ -254,8 +255,8 @@ class Env_gr(gym.GoalEnv):
         self.clear_ball_markers()
 
         while True:
-            self.release_all_parts()
             if self.move_with_obj:
+                self.release_all_parts()
                 self.mount_parts()
             for i, robot in enumerate(self.robots):
                 if robot.is_success and np.random.random() < 0.5:
@@ -274,8 +275,6 @@ class Env_gr(gym.GoalEnv):
                 for i, robot in enumerate(self.robots):
                     robot.reach_count = 0
                     robot.reached_goal = 0
-                    robot.goal_pose = robot.goal
-                    robot.init_pose = robot.getObservation_EE()
                     robot.goal_set = [robot.goal]
                 break
 
@@ -516,7 +515,7 @@ class Env_gr(gym.GoalEnv):
             dist2goals_ee = [dist2goal_ee]
             dist2goals_js = [dist2goal_js]
 
-            if robot.is_reached == 1:
+            if self._sequence_task and robot.is_reached == 1:
                 if not robot.is_success:
                     robot.reach_count += 1
                     robot.is_success = True
@@ -597,19 +596,23 @@ class Env_gr(gym.GoalEnv):
             if self._obs_type == "common_obs_with_links_dist":
                 obs_list[i] = np.concatenate([obs_list[i], links_obs])
 
-
         ######## object bounding box observation
 
         for i, robot in enumerate(self.robots):
             if robot.item_picking is None:
-                obj_bounding_box = [0,0,0]
-                if self._useInverseKinematics:
-                    obj_center_pose = [0] * 4
-                    obj_grasp_pose = [0] * 4
-                else:
-                    obj_center_pose = [0] * 7
-                    obj_grasp_pose = [0] * 7
-                obj_bb_observation = np.array(obj_bounding_box+obj_center_pose)
+                obj_bounding_box = np.array([0, 0, 0])
+                obj_center_pose = robot.getObservation_EE()
+                obj_center_pose[2] -= 0.05
+                obj_grasp_pose = robot.getObservation_EE()
+                obj_grasp_pose[2] -= 0.05
+                obj_bb_observation = np.concatenate([obj_bounding_box, obj_center_pose])
+
+                # obj_bounding_box = np.array([0.5, 0.1, 0.05])
+                # obj_center_pose = robot.getObservation_EE()
+                # obj_center_pose[2] -= 0.075
+                # obj_bb_observation = np.concatenate([obj_bounding_box, obj_center_pose])
+
+
             else:
                 obj_bounding_box = robot.item_picking.part_size
                 obj_center_pose = robot.item_picking.getCenterPose()
@@ -834,7 +837,7 @@ class Env_gr(gym.GoalEnv):
             robot.goal_JS_pos = robot.getObservation_JS()
         goal_failed = False
         for robot in self.robots:
-            coll, _ = robot.check_collision(collision_distance=0.2)
+            coll, _ = robot.check_collision(collision_distance=0.05)
             goal_failed = goal_failed or coll
         if goal_failed:
             if self._renders:
@@ -846,7 +849,7 @@ class Env_gr(gym.GoalEnv):
             robot.init_JS_pos = robot.getObservation_JS()
         init_failed = False
         for robot in self.robots:
-            coll, _ = robot.check_collision(collision_distance=0.2)
+            coll, _ = robot.check_collision(collision_distance=0.05)
             init_failed = init_failed or coll
         if init_failed:
             if self._renders:
@@ -875,7 +878,6 @@ class Env_gr(gym.GoalEnv):
                 robot.is_reached = 0
                 robot.is_success = False
                 robot.resetGoalPose()
-                robot.goal_pose = robot.goal
                 robot.goal_set.append(robot.goal)
                 # if self._evaluate:
                 #     robot.goal_EE_pos[2] = 0.5
@@ -890,6 +892,7 @@ class Env_gr(gym.GoalEnv):
         return self._observation()
 
     def check_reach(self, robot, dist2goal):
+        # print("reach:\t",dist2goal)
         success_dist_threshold = self.success_dist_threshold
         if self._action_type == "js":
             success_dist_threshold /= 2
@@ -1123,12 +1126,12 @@ class Env_gr(gym.GoalEnv):
                 part.placed(robot)
 
         # set all parts to their initial position
-        for i in range (self.robots_num):
+        for i in range(self.robots_num):
             init_pose_x = np.array([0.2, 0.6, 1])
             init_pose_y = np.array([-0.6, 0, 0.6])
 
-            for j in range(self.parts_num //self.robots_num):
-                part = self.parts[i * self.parts_num//self.robots_num + j]
+            for j in range(self.parts_num // self.robots_num):
+                part = self.parts[i * self.parts_num // self.robots_num + j]
                 x = (init_pose_x[j // 3] + 1.2) * (-1) ** i
                 y = init_pose_y[j % 3]
                 z = self._partsBaseSize[2] * 2
@@ -1140,27 +1143,34 @@ class Env_gr(gym.GoalEnv):
             for i in range(self.robots_num):
                 robot = self.robots[i]
 
-                if self.fixed_obj_shape:
-                    j = 0
-                elif self.obj_shape_type == "random":
-                    j = random.randint(0,self.parts_num//2-1)
-                elif self.obj_shape_type == "bar":
-                    j = 1
-                elif self.obj_shape_type == "disk":
-                    j = 6
-                elif self.obj_shape_type == "cube":
-                    j = 4
-                elif self.obj_shape_type == "small":
-                    j = 5
-                elif self.obj_shape_type == "sphere":
-                    j = 7
-                else:
-                    j = 0
-                part = self.parts[i * self.parts_num//self.robots_num + j]
+                if self.obj_shape_type == "task":
+                    if np.random.random() < 0.5:
+                        part = self.parts[i * self.parts_num // self.robots_num + 0]
+                        cid = robot.pickItem(part)
+                        part.picked(robot, cid)
 
-                ######## apply picking action
-                cid = robot.pickItem(part)
-                part.picked(robot, cid)
+                else:
+                    if self.fixed_obj_shape:
+                        j = 0
+                    elif self.obj_shape_type == "random":
+                        j = random.randint(0, self.parts_num // 2 - 1)
+                    elif self.obj_shape_type == "bar":
+                        j = 1
+                    elif self.obj_shape_type == "disk":
+                        j = 6
+                    elif self.obj_shape_type == "cube":
+                        j = 4
+                    elif self.obj_shape_type == "small":
+                        j = 5
+                    elif self.obj_shape_type == "sphere":
+                        j = 7
+                    else:
+                        j = 0
+                    part = self.parts[i * self.parts_num // self.robots_num + j]
+
+                    ######## apply picking action
+                    cid = robot.pickItem(part)
+                    part.picked(robot, cid)
 
     def clear_ball_markers(self):
         remove_obstacles(self.ball_markers[1:])

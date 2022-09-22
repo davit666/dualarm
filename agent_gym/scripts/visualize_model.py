@@ -80,7 +80,7 @@ if __name__ == '__main__':
         # action2 = distribution.get_actions(deterministic=True).cpu().detach().numpy()[0]
 
 
-        obs, rewards, done, info = env.step(action)
+        obs, rewards, done, info = env.step(action,scale_action=True)
         # print(rewards)
         # time.sleep(0.1)
         # env.render()

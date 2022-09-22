@@ -146,7 +146,7 @@ class Robot:
             self.initialize_by_EE_pose(self.init_EE_pos)
             self.init_JS_pos = np.array(self.init_jointStates)
         self.resetGoalPose(goal_pos)
-
+        self.resetInitPose(default_pose=False)
         self.sucking = False
         self.is_success = False
         self.is_reached = False
@@ -166,15 +166,30 @@ class Robot:
 
         return True
 
-    def resetGoalPose(self, goal_pos=None, default_pose=False):
+    def resetInitPose(self, init_pose=None, default_pose=True):
+        if default_pose:
+            self.init_EE_pos = self.default_goal_pose.copy()
+            self.init_pose = np.concatenate((self.init_EE_pos[:3], p.getEulerFromQuaternion(self.goal_EE_pos[3:])[
+                                                              -1:])) if self.useInverseKinematics else self.init_EE_pos
+        elif init_pose is not None:
+            self.init_pose = init_pose
+            init_rpy = [0, 0, init_pose[-1]] if self.useInverseKinematics else init_pose[3:]
+            self.init_EE_pos = np.concatenate((init_pose[:3], p.getQuaternionFromEuler(init_rpy)[:]))
+        else:
+            self.init_pose = self.getObservation_EE()
+            init_rpy = [0, 0, self.init_pose[-1]] if self.useInverseKinematics else self.init_pose[3:]
+            self.init_EE_pos = np.concatenate((self.init_pose[:3], p.getQuaternionFromEuler(init_rpy)[:]))
+        return self.init_pose
+
+    def resetGoalPose(self, goal_pose=None, default_pose=False):
         if default_pose:
             self.goal_EE_pos = self.default_goal_pose.copy()
             self.goal = np.concatenate((self.goal_EE_pos[:3], p.getEulerFromQuaternion(self.goal_EE_pos[3:])[
                                                               -1:])) if self.useInverseKinematics else self.goal_EE_pos
-        elif goal_pos is not None:
-            self.goal = goal_pos
-            goal_rpy = [0, 0, goal_pos[-1]] if self.useInverseKinematics else goal_pos[3:]
-            self.goal_EE_pos = np.concatenate((goal_pos[:3], p.getQuaternionFromEuler(goal_rpy)[:]))
+        elif goal_pose is not None:
+            self.goal = goal_pose
+            goal_rpy = [0, 0, goal_pose[-1]] if self.useInverseKinematics else goal_pose[3:]
+            self.goal_EE_pos = np.concatenate((goal_pose[:3], p.getQuaternionFromEuler(goal_rpy)[:]))
         else:
             self.goal_EE_pos = self.sample_EE_pose(self.goal_state)
             if self.item_picking is not None:
@@ -183,6 +198,7 @@ class Robot:
             self.goal = np.concatenate((self.goal_EE_pos[:3], p.getEulerFromQuaternion(self.goal_EE_pos[3:])[
                                                               -1:])) if self.useInverseKinematics else self.goal_EE_pos
 
+        self.goal_pose = self.goal.copy()
         return self.goal
 
     #### get observation ####

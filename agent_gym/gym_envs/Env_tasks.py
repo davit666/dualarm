@@ -102,11 +102,12 @@ class Env_tasks(gym.GoalEnv):
                  renders=False,
                  showBallMarkers=False,
                  freezeAction=False,
-                 action_type="MultiDiscrete",
+                 task_allocator_action_type="MultiDiscrete",
                  task_allocator_reward_type=None,
                  task_allocator_obs_type=None,
                  motion_planner_reward_type="delta_dist_with_sparse_reward",
                  motion_planner_obs_type="common_obs",
+                 motion_planner_action_type="ee",
                  parts_num=6,
                  fragment_length=20,
                  maxSteps=300):
@@ -123,16 +124,17 @@ class Env_tasks(gym.GoalEnv):
         self._fragment_length = fragment_length
         self.parts_num = parts_num
 
-        self.action_type = action_type
+        self.action_type = task_allocator_action_type
         self.task_allocator_reward_type = task_allocator_reward_type
         self.task_allocator_obs_type = task_allocator_obs_type
         self.motion_planner_reward_type = motion_planner_reward_type
         self.motion_planner_obs_type = motion_planner_obs_type
+        self.motion_planner_action_type = motion_planner_action_type
 
         self.success_dist_threshold = env_config['success_dist_threshold'] + 0.1
         self.lift_height = 0.55  # 0.15
         self.dead_lock_count_threshold = 400 / fragment_length
-        self.use_reset = True
+        self.use_reset = False
 
         self.selected_planner = self.go_straight_planner
 
@@ -143,7 +145,7 @@ class Env_tasks(gym.GoalEnv):
                                  freezeAction=self._freezeAction,
                                  showBallMarkers=self._showBallMarkers, maxSteps=500,
                                  reward_type=self.motion_planner_reward_type, obs_type=self.motion_planner_obs_type,
-                                 in_task=True)
+                                 action_type=self.motion_planner_action_type, in_task=True)
         self.robots_num = self.robots_env.robots_num
         self.base_height = self.robots_env._partsBaseSize[2] * 2
 
@@ -202,11 +204,11 @@ class Env_tasks(gym.GoalEnv):
             robot.mode = Mode()
         ######## load parts and get parts
         self.parts = []
-        self.parts_colors = ['b', 'b2', 'b3', 'b4', 'b5', 'b6']
+        # self.parts_colors = ['b', 'b2', 'b3', 'b4', 'b5', 'b6']
         for j in range(self.parts_num):
-            part_color = self.parts_colors[j]
-            print(part_color)
-            part = Part(useInverseKinematics=self._useInverseKinematics, color=part_color)
+            # part_color = self.parts_colors[j]
+            # print(part_color)
+            part = Part(useInverseKinematics=self._useInverseKinematics, type='b')
             self.parts.append(part)
 
         p.stepSimulation()
@@ -240,7 +242,8 @@ class Env_tasks(gym.GoalEnv):
             self.apply_placing_item(robot)
         self.robots_env.reset()
         for robot in self.robots:
-            robot.resetGoalPose(default_pose=True)
+            robot.resetGoalPose(default_pose=False)
+            robot.resetInitPose(default_pose=False)
             robot.success_count = 0
             robot.task_switched = 0
             robot.mode_switched = 0
@@ -263,7 +266,7 @@ class Env_tasks(gym.GoalEnv):
             init_x = init_pose_base[0] + (np.random.random() - 0.5) / 10.
             init_y = init_pose_base[1] + (np.random.random() - 0.5) / 10.
             init_pos = [init_x, init_y, self.base_height]
-            init_rz = (np.random.random() - 0.5) * math.pi
+            init_rz = (np.random.random() - 0.5) * math.pi/10
             init_orn = p.getQuaternionFromEuler([0, 0, init_rz])
             part.resetInitPose(init_pos, init_orn)
             #### set parts goal pose
@@ -501,11 +504,12 @@ class Env_tasks(gym.GoalEnv):
                 episode_info['2_task_done/robot_{}'.format(i + 1)] = robot.success_count
                 episode_info['4_fail/robot_{}'.format(i + 1)] = robot.is_failed
                 episode_info['5_accumulated_reward/robot_{}'.format(i + 1)] = self.accumulated_reward_dict['robots'][i]
-                episode_info['5_accumulated_reward/triangle_{}'.format(i + 1)] = self.accumulated_reward_dict['triangle'][i]
+                episode_info['5_accumulated_reward/triangle_{}'.format(i + 1)] = \
+                self.accumulated_reward_dict['triangle'][i]
                 episode_info['5_average_reward/robot_{}'.format(i + 1)] = self.accumulated_reward_dict['robots'][
                                                                               i] / self.env_step_counter
                 episode_info['5_average_reward/triangle_{}'.format(i + 1)] = self.accumulated_reward_dict['triangle'][
-                                                                              i] / self.env_step_counter
+                                                                                 i] / self.env_step_counter
                 episode_info['6_working_time/robot_{}'.format(i + 1)] = 1 - robot.slack_step / self.env_step_counter
                 episode_info['7_task_switched/robot_{}'.format(i + 1)] = robot.task_switched
                 episode_info['8_mode_switched/robot_{}'.format(i + 1)] = robot.mode_switched
@@ -628,10 +632,8 @@ class Env_tasks(gym.GoalEnv):
 
             robots_rewards.append(robot_reward)
 
-
         triangle_penaltys = []
         for i, robot in enumerate(self.robots):
-
             # base_xy = robot.BasePos[:2]
             # ee_xy = robot.getObservation_EE()[:2]
             # goal_xy = robot.goal[:2]
@@ -653,7 +655,6 @@ class Env_tasks(gym.GoalEnv):
 
             robot_cutting_ratio_penalty = 0
             triangle_penaltys.append(robot_cutting_ratio_penalty)
-
 
         #### for parts
         parts_rewards = []
@@ -865,21 +866,42 @@ class Env_tasks(gym.GoalEnv):
             else:
                 robots_planner_actions = [np.array([0] * self.robots_env.action_dim)] * self.robots_num
                 for i, robot in enumerate(self.robots):
-                    robots_planner_actions[i] = robots_planners[i]([robot])[0]
-
+                    robots_planner_actions[i] = robots_planners[i]([robot])[i]
             # print(robots_modes)
-            # time.sleep(0.2)
             #### apply planner action to robots and get planner termination, mode change
             #### if planner terminated, implement mode change and apply extra action(pick&place) due to current mode
             planner_action = np.concatenate(robots_planner_actions)
+
             _, _, _, _ = self.robots_env.step(planner_action, scale_action=False, use_reset=self.use_reset)
+
+            for i,robot in enumerate(self.robots):
+                ee = robot.getObservation_EE()
+                g = robot.goal_pose
+                print("robot:\t",i,"\tgoal:\t",g,"\tee:\t",ee,"\tsuccess:\t",robot.is_success)
 
             fragment_terminated = False
             if all([robot.is_success and robot.task_idx_allocated == -1 for robot in self.robots]):
                 # env finished
                 fragment_terminated = True
-            else:
+            # else:
+            #############################start
+            # elif all(mode[1] != "moving" for mode in robots_modes):
+            #     for robot in self.robots:
+            #         if robot.is_success and robot.mode.check_counter():
+            #             # a robot is success, switch its mode
+            #             self.assign_mode_switch(robot)
+            #             # re-assign planners due to mode switch
+            #             robots_modes, robots_planners = self.assign_planners()
+            #             if self.need_task_allocation:
+            #                 fragment_terminated = True
+            #         elif robot.is_failed:
+            #             fragment_terminated = True
+
+            elif all([robot.is_success for robot in self.robots]):
+            ##############################end
+                # time.sleep(3)
                 for robot in self.robots:
+
                     if robot.is_success and robot.mode.check_counter():
                         # a robot is success, switch its mode
                         self.assign_mode_switch(robot)
@@ -908,7 +930,8 @@ class Env_tasks(gym.GoalEnv):
             if moving_mode in ["up", "down"]:
                 robot_planner = self.go_straight_planner
             elif moving_mode == "moving":
-                if robot.is_success:
+                # if robot.is_success:
+                if all([robot_tmp.is_success for robot_tmp in self.robots]):
                     robot_planner = self.go_straight_planner
                 else:
                     robot_planner = self.selected_planner
@@ -1065,7 +1088,7 @@ class Env_tasks(gym.GoalEnv):
             min_dist = self.success_dist_threshold
             for j, part in enumerate(self.parts):
                 grasp_pose = part.getGraspPose()
-                if np.linalg.norm(ee - grasp_pose) < min_dist :#########$$$$$$$$$$$$$$$$$$$$$
+                if np.linalg.norm(ee - grasp_pose) < min_dist:  #########$$$$$$$$$$$$$$$$$$$$$
                     min_dist = np.linalg.norm(ee - grasp_pose)
                     item_to_pick = part
 
@@ -1104,6 +1127,10 @@ class Env_tasks(gym.GoalEnv):
         else:
 
             item_to_place = robot.item_picking
+            print("!!!!!!!!!!!!!!!!!!!!")
+            print(self._useInverseKinematics)
+            print("robot.item_picking", robot.item_picking)
+            print("item_to_place.getGoalPose()       ", item_to_place.getGoalPose())
             ######## calibrate robot gripper and clear robot velocity to prepare placing
             place_action = robot.calculStraightAction2Goal(item_to_place.getGoalPose())
             other_action = [0 for i in range(len(place_action))]
@@ -1237,13 +1264,13 @@ class Env_tasks(gym.GoalEnv):
             robot_list = self.robots
         ######## get predicted action
         obs = self.robots_env._observation()
-        # predicted_action = self.robot_policy.predict(obs, deterministic=True)[0]
-        policy = self.robot_policy.policy
-        observation, vectorized_env = policy.obs_to_tensor(obs)
-        features = policy.extract_features(observation)
-        latent_pi = policy.mlp_extractor.forward(features)[0]
-        distribution = policy._get_action_dist_from_latent(latent_pi)
-        predicted_action = distribution.get_actions(deterministic=True).cpu().detach().numpy()[0]
+        predicted_action = self.robot_policy.predict(obs, deterministic=True)[0]
+        # policy = self.robot_policy.policy
+        # observation, vectorized_env = policy.obs_to_tensor(obs)
+        # features = policy.extract_features(observation)
+        # latent_pi = policy.mlp_extractor.forward(features)[0]
+        # distribution = policy._get_action_dist_from_latent(latent_pi)
+        # predicted_action = distribution.get_actions(deterministic=True).cpu().detach().numpy()[0]
 
         ######## extract action from prediction
         act_dim = self.robots_env.action_dim
@@ -1253,6 +1280,7 @@ class Env_tasks(gym.GoalEnv):
             robot_action = np.array(predicted_action[robot_idx * act_dim:(robot_idx + 1) * act_dim])
             robot_action *= self.robots_env.action_scale
             robots_planner_action_list.append(robot_action)
+        print("robots_planner_action_list",robots_planner_action_list)
         return robots_planner_action_list
 
         return
@@ -1272,10 +1300,15 @@ class Env_tasks(gym.GoalEnv):
                     commands_scale = 0.1
             else:
                 commands_scale = 0.5
-            robot_planner_action = robot.calculStraightAction2Goal(robot.goal, commands_scale=commands_scale)
+            robot_planner_action = robot.calculStraightAction2Goal(robot.goal_pose, commands_scale=commands_scale)
             robots_planner_action_list.append(robot_planner_action)
         # print(np.linalg.norm(robot_planner_action[0]), np.linalg.norm(robot_planner_action[1]))
         # time.sleep(3)
+        # print("go straight")
+        # print(robots_planner_action_list)
+        # time.sleep(0.2)
+        # print("out")
+
         return robots_planner_action_list
 
     def __del__(self):

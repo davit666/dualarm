@@ -33,13 +33,14 @@ class TrainConfig:
     load_model_path = 'test_models/' + env_name + '/0831/common2'
 
     load_model_path = 'test_models/' + env_name + '/0831/bb2'
+    load_model_path = 'test_models/' + env_name + '/0919/policy_0.2_gap'
 
     ######## model ########
     custom_network = False
     dict_obs = False
 
-    model_date = env_name + "/monitoring/0916_ee/best_policy/"
-    model_name = "actor_64_32cpu_lr_const_1e-3_ratio_weight_1_coll_dist_0.05_keep_bonus_when_success/"
+    model_date = env_name + "/monitoring/0922_ee/best_policy_0.05_schrodinger_obj/"
+    model_name = "actor_64_32cpu_lr_linear_1e-3_ratio_weight_1_coll_dist_0.05_keep_bonus_when_success/"
     alg_name = "PPO"
     reward_type = "delta_dist_field_with_sparse_reward"#"negative_dist_field_with_sparse_reward" #"delta_dist_&_overlap_area_ratio_with_sparse_reward"  #"delta_dist_&_cutting_area_ratio_with_sparse_reward" #
     obs_type = "common_obs_with_obj_bb"#"common_obs" # "common_obs_with_links_dist"  #"obs_with_triangle_features"  #
@@ -72,7 +73,7 @@ class EnvConfig:
     #key status
     move_with_obj = True
     fixed_obj_shape = True
-    obj_shape_type = "box" # "random" #
+    obj_shape_type = "task"#"box" # "random" #
     keep_bonus_when_success = True
     stepback_if_collide = False
 
@@ -224,15 +225,18 @@ class TaskConfig:
     custom_network = "basic"
     dict_obs = False
 
-    model_date = env_name + "/0314/baseline/go_straight_planner_reset_0.1_frag5"
-    model_name = "normal_net_width_128_no_tri_penalty_part4/20m_lr1e-3_cpu16_batch_512"
+    model_date = env_name + "/monitoring/0921/baseline/test"
+    model_name = "test/lr_linear_1e-3_cpu16"
     alg_name = "PPO"
 
-    task_allocator_reward_type = "sparse_reward_with_tri_penalty_cut1"
-    task_allocator_obs_type ="feature_observation"
+
     motion_planner_reward_type = "delta_dist_&_cutting_area_ratio_with_sparse_reward" #"delta_dist_with_sparse_reward" #"delta_dist_&_overlap_area_ratio_with_sparse_reward"  #
-    motion_planner_obs_type = "obs_with_triangle_features"  #"common_obs"  #
-    action_type = "MultiDiscrete"
+    motion_planner_obs_type = "common_obs_with_obj_bb"
+    motion_planner_action_type = "ee"
+
+    task_allocator_reward_type = "delta_dist_field_with_sparse_reward"
+    task_allocator_obs_type = "feature_observation"
+    task_allocator_action_type = "MultiDiscrete"
 
     ######## save & log ########
     log_path = "../../log_datas/"
@@ -242,11 +246,11 @@ class TaskConfig:
     ######## cpu ########
     num_cpu = 16
     ######## lr scheduler ########
-    use_lr_scheduler = False
+    use_lr_scheduler = True
     ######## parameter ########
     learning_rate = 1e-3
     n_steps = 2048
-    batch_size = 512
+    batch_size = 2048
     n_epochs = 10
     total_timesteps = 2e7
 
@@ -258,12 +262,12 @@ class TaskConfig:
     fragment_length = 5
     maxSteps = 300
     selected_motion_planner_policy = False
-    motion_planner_load_model_path = 'test_models/' + 'goal_reaching' + '/0307/cut_repeat_2'
-
+    motion_planner_load_model_path = 'test_models/' + 'goal_reaching' + '/0919/policy_0.2_gap'
+    motion_planner_load_model_path = 'test_models/' + 'goal_reaching' + '/0921/policy_0.1_gap'
     ######## para retune ########
     if alg_name == "SAC":
         action_type = "Box"
-        batch_size = 256
+        batch_size = 2048
 
 
 def load_task_config():
@@ -283,9 +287,11 @@ def load_task_config():
 
     task_config['task_allocator_reward_type'] = TA.task_allocator_reward_type
     task_config['task_allocator_obs_type'] = TA.task_allocator_obs_type
+    task_config['task_allocator_action_type'] = TA.task_allocator_action_type
     task_config['motion_planner_reward_type'] = TA.motion_planner_reward_type
     task_config['motion_planner_obs_type'] = TA.motion_planner_obs_type
-    task_config['action_type'] = TA.action_type
+    task_config['motion_planner_action_type'] = TA.motion_planner_action_type
+
 
     task_config['log_path'] = TA.log_path
     task_config['save_path'] = TA.save_path

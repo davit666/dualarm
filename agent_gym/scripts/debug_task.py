@@ -40,17 +40,18 @@ if __name__ == "__main__":
     task_allocator_load_model_path = task_config['task_allocator_load_model_path']
     motion_planner_load_model_path = task_config['motion_planner_load_model_path']
 
-    env = Env_tasks(env_config, renders=False, useInverseKinematics=True, freezeAction=False,
+    env = Env_tasks(env_config, renders=True, useInverseKinematics=True, freezeAction=False,
                     showBallMarkers=False, maxSteps=task_config['maxSteps'],
-                    action_type=task_config['action_type'],
+                    task_allocator_action_type=task_config['task_allocator_action_type'],
                     task_allocator_reward_type=task_config['task_allocator_reward_type'],
                     task_allocator_obs_type=task_config['task_allocator_obs_type'],
                     motion_planner_reward_type=task_config['motion_planner_reward_type'],
                     motion_planner_obs_type=task_config['motion_planner_obs_type'],
+                    motion_planner_action_type = task_config['motion_planner_action_type'],
                     fragment_length=task_config['fragment_length'], parts_num=task_config['parts_num'])
 
-    # policy = PPO.load(motion_planner_load_model_path)
-    # env.assign_policy(policy=policy)
+    policy = PPO.load(motion_planner_load_model_path)
+    env.assign_policy(policy=policy)
     task_allocator = env.random_allocator
     task_allocator = env.distance_based_allocator
     # time.sleep(5)
@@ -117,7 +118,7 @@ if __name__ == "__main__":
     task_done =[]
     step_count_success = []
     step_count_fail = []
-    loop = 10000
+    loop = 10
     for i in range(loop):
         print("loop:\t", i)
         count = 0

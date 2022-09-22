@@ -607,10 +607,10 @@ class Env_gr(gym.GoalEnv):
                 obj_grasp_pose[2] -= 0.05
                 obj_bb_observation = np.concatenate([obj_bounding_box, obj_center_pose])
 
-                # obj_bounding_box = np.array([0.5, 0.1, 0.05])
-                # obj_center_pose = robot.getObservation_EE()
-                # obj_center_pose[2] -= 0.075
-                # obj_bb_observation = np.concatenate([obj_bounding_box, obj_center_pose])
+                obj_bounding_box = np.array([0.5, 0.1, 0.05])
+                obj_center_pose = robot.getObservation_EE()
+                obj_center_pose[2] -= 0.075
+                obj_bb_observation = np.concatenate([obj_bounding_box, obj_center_pose])
 
 
             else:

@@ -136,6 +136,8 @@ class Env_tasks(gym.GoalEnv):
         self.dead_lock_count_threshold = 400 / fragment_length
         self.use_reset = False
 
+        self.sync_execution = True
+
         self.selected_planner = self.go_straight_planner
 
         self.observation_history_length = env_config['observation_history_length']
@@ -266,7 +268,7 @@ class Env_tasks(gym.GoalEnv):
             init_x = init_pose_base[0] + (np.random.random() - 0.5) / 10.
             init_y = init_pose_base[1] + (np.random.random() - 0.5) / 10.
             init_pos = [init_x, init_y, self.base_height]
-            init_rz = (np.random.random() - 0.5) * math.pi/10
+            init_rz = (np.random.random() - 0.5) * math.pi / 10
             init_orn = p.getQuaternionFromEuler([0, 0, init_rz])
             part.resetInitPose(init_pos, init_orn)
             #### set parts goal pose
@@ -505,7 +507,7 @@ class Env_tasks(gym.GoalEnv):
                 episode_info['4_fail/robot_{}'.format(i + 1)] = robot.is_failed
                 episode_info['5_accumulated_reward/robot_{}'.format(i + 1)] = self.accumulated_reward_dict['robots'][i]
                 episode_info['5_accumulated_reward/triangle_{}'.format(i + 1)] = \
-                self.accumulated_reward_dict['triangle'][i]
+                    self.accumulated_reward_dict['triangle'][i]
                 episode_info['5_average_reward/robot_{}'.format(i + 1)] = self.accumulated_reward_dict['robots'][
                                                                               i] / self.env_step_counter
                 episode_info['5_average_reward/triangle_{}'.format(i + 1)] = self.accumulated_reward_dict['triangle'][
@@ -874,31 +876,20 @@ class Env_tasks(gym.GoalEnv):
 
             _, _, _, _ = self.robots_env.step(planner_action, scale_action=False, use_reset=self.use_reset)
 
-            for i,robot in enumerate(self.robots):
+            for i, robot in enumerate(self.robots):
                 ee = robot.getObservation_EE()
                 g = robot.goal_pose
-                print("robot:\t",i,"\tgoal:\t",g,"\tee:\t",ee,"\tsuccess:\t",robot.is_success)
+                print("robot:\t", i, "\tgoal:\t", g, "\tee:\t", ee, "\tsuccess:\t", robot.is_success, "\nrobot:\t", i,
+                      "\tmode:\t", robots_modes[i][0], robots_modes[i][1],"\tplanner:\t", robots_planners[i] )
 
             fragment_terminated = False
             if all([robot.is_success and robot.task_idx_allocated == -1 for robot in self.robots]):
                 # env finished
                 fragment_terminated = True
             # else:
-            #############################start
-            # elif all(mode[1] != "moving" for mode in robots_modes):
-            #     for robot in self.robots:
-            #         if robot.is_success and robot.mode.check_counter():
-            #             # a robot is success, switch its mode
-            #             self.assign_mode_switch(robot)
-            #             # re-assign planners due to mode switch
-            #             robots_modes, robots_planners = self.assign_planners()
-            #             if self.need_task_allocation:
-            #                 fragment_terminated = True
-            #         elif robot.is_failed:
-            #             fragment_terminated = True
 
-            elif all([robot.is_success for robot in self.robots]):
-            ##############################end
+            elif (self.sync_execution and all([robot.is_success for robot in self.robots])) or not self.sync_execution:
+                ##############################end
                 # time.sleep(3)
                 for robot in self.robots:
 
@@ -931,7 +922,8 @@ class Env_tasks(gym.GoalEnv):
                 robot_planner = self.go_straight_planner
             elif moving_mode == "moving":
                 # if robot.is_success:
-                if all([robot_tmp.is_success for robot_tmp in self.robots]):
+                if (self.sync_execution and all([robot_tmp.is_success for robot_tmp in self.robots])) or (
+                        not self.sync_execution and robot.is_success):
                     robot_planner = self.go_straight_planner
                 else:
                     robot_planner = self.selected_planner
@@ -1280,7 +1272,7 @@ class Env_tasks(gym.GoalEnv):
             robot_action = np.array(predicted_action[robot_idx * act_dim:(robot_idx + 1) * act_dim])
             robot_action *= self.robots_env.action_scale
             robots_planner_action_list.append(robot_action)
-        print("robots_planner_action_list",robots_planner_action_list)
+        print("robots_planner_action_list", robots_planner_action_list)
         return robots_planner_action_list
 
         return
@@ -1297,9 +1289,9 @@ class Env_tasks(gym.GoalEnv):
                 if mode_id in [1, 2, 4, 5]:
                     commands_scale = 0.05
                 else:
-                    commands_scale = 0.1
+                    commands_scale = 0.05
             else:
-                commands_scale = 0.5
+                commands_scale = 0.05
             robot_planner_action = robot.calculStraightAction2Goal(robot.goal_pose, commands_scale=commands_scale)
             robots_planner_action_list.append(robot_planner_action)
         # print(np.linalg.norm(robot_planner_action[0]), np.linalg.norm(robot_planner_action[1]))

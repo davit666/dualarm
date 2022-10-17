@@ -144,9 +144,10 @@ class Robot:
         if reset_init_pos:
             self.init_EE_pos = self.sample_EE_pose(self.init_state) if init_pos is None else init_pos
             self.initialize_by_EE_pose(self.init_EE_pos)
-            self.init_JS_pos = np.array(self.init_jointStates)
+
         self.resetGoalPose(goal_pos)
         self.resetInitPose(default_pose=False)
+        self.init_JS_pos = self.getObservation_JS()
         self.sucking = False
         self.is_success = False
         self.is_reached = False

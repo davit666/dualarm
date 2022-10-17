@@ -33,13 +33,17 @@ class TrainConfig:
     load_model_path = 'test_models/' + env_name + '/0831/common2'
 
     load_model_path = 'test_models/' + env_name + '/0831/bb2'
+
+
     load_model_path = 'test_models/' + env_name + '/0919/policy_0.2_gap'
+    load_model_path = 'test_models/' + env_name + '/0921/policy_0.1_gap'
+    # load_model_path = 'test_models/' + env_name + '/0925/policy_0.05_gap_scho'
 
     ######## model ########
     custom_network = False
     dict_obs = False
 
-    model_date = env_name + "/monitoring/0922_ee/best_policy_0.05_schrodinger_obj/"
+    model_date = env_name + "/monitoring/1015-test/best_policy_0.05_schrodinger_obj/"
     model_name = "actor_64_32cpu_lr_linear_1e-3_ratio_weight_1_coll_dist_0.05_keep_bonus_when_success/"
     alg_name = "PPO"
     reward_type = "delta_dist_field_with_sparse_reward"#"negative_dist_field_with_sparse_reward" #"delta_dist_&_overlap_area_ratio_with_sparse_reward"  #"delta_dist_&_cutting_area_ratio_with_sparse_reward" #
@@ -52,7 +56,7 @@ class TrainConfig:
     model_save_freq = 1e6
 
     ######## cpu ########
-    num_cpu = 32
+    num_cpu = 16
     ######## lr scheduler ########
     use_lr_scheduler = True
     ######## parameter ########
@@ -73,7 +77,7 @@ class EnvConfig:
     #key status
     move_with_obj = True
     fixed_obj_shape = True
-    obj_shape_type = "task"#"box" # "random" #
+    obj_shape_type = "box"#"task"#"box" # "random" #
     keep_bonus_when_success = True
     stepback_if_collide = False
 

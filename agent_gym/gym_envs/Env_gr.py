@@ -281,6 +281,8 @@ class Env_gr(gym.GoalEnv):
         for i, robot in enumerate(self.robots):
             robot.norm_dist = np.linalg.norm(robot.getObservation_EE() - robot.goal)
             robot.accumulated_dist = 0
+            robot.accumulated_normalized_dist = 0
+            robot.accumulated_step = 0
 
             if self._renders and not self._in_task:
                 color = robot.item_picking.color if robot.item_picking is not None else [0, 0, 1, 1]
@@ -367,7 +369,14 @@ class Env_gr(gym.GoalEnv):
         ##### count accumulated value
         for i, robot in enumerate(self.robots):
             robot.accumulated_dist += np.linalg.norm(
-                self.obs_info["achieved_goal_{}".format(i + 1)] - self.prev_obs_info["achieved_goal_{}".format(i + 1)])
+                self.obs_info["achieved_goal_{}".format(i + 1)][:3] - self.prev_obs_info[
+                                                                          "achieved_goal_{}".format(i + 1)][:3])
+            robot.accumulated_normalized_dist += np.linalg.norm(
+                self.obs_info["achieved_normalized_goal_{}".format(i + 1)][:3] - self.prev_obs_info[
+                                                                                     "achieved_normalized_goal_{}".format(
+                                                                                         i + 1)][:3])
+
+            robot.accumulated_step += not (robot.is_success or robot.is_failed)
             robot.accumulated_collision += robot.is_collision
             robot.accumulated_out_of_bounding_box += robot.is_out_of_bounding_box
 
@@ -448,6 +457,7 @@ class Env_gr(gym.GoalEnv):
                     range(self.robots_num)) / self.robots_num
 
             # episode_info = {'episode': info}
+            episode_info['prediction_model_state_data'] = self.get_prediction_model_state_data()
         else:
             episode_info = {'goal_reached': all(robot.is_success for robot in self.robots)}
         # print("reward:\t", reward, reward_list)
@@ -542,6 +552,7 @@ class Env_gr(gym.GoalEnv):
             self.obs_info["observation_{}".format(i + 1)] = robot_obs.copy()
             self.obs_info["joint_states_{}".format(i + 1)] = js.copy()
             self.obs_info["achieved_goal_{}".format(i + 1)] = ee.copy()
+            self.obs_info["achieved_normalized_goal_{}".format(i + 1)] = normalized_ee.copy()
             self.obs_info["desired_goal_ee{}".format(i + 1)] = goal_ee.copy()
             self.obs_info["desired_goal_js{}".format(i + 1)] = goal_js.copy()
             self.obs_info["dist_to_goal_ee_{}".format(i + 1)] = dist2goals_ee[0]
@@ -837,7 +848,7 @@ class Env_gr(gym.GoalEnv):
             robot.goal_JS_pos = robot.getObservation_JS()
         goal_failed = False
         for robot in self.robots:
-            coll, _ = robot.check_collision(collision_distance=0.05)
+            coll, _ = robot.check_collision(collision_distance=0.1)
             goal_failed = goal_failed or coll
         if goal_failed:
             if self._renders:
@@ -849,7 +860,7 @@ class Env_gr(gym.GoalEnv):
             robot.init_JS_pos = robot.getObservation_JS()
         init_failed = False
         for robot in self.robots:
-            coll, _ = robot.check_collision(collision_distance=0.05)
+            coll, _ = robot.check_collision(collision_distance=0.1)
             init_failed = init_failed or coll
         if init_failed:
             if self._renders:
@@ -1175,6 +1186,69 @@ class Env_gr(gym.GoalEnv):
     def clear_ball_markers(self):
         remove_obstacles(self.ball_markers[1:])
         self.ball_markers = [self.global_workspace_cube]
+
+    def get_prediction_model_state_data(self):
+
+        if not self.terminated:
+            return None
+
+        robots_input = []
+        robots_output = []
+
+        for i, robot in enumerate(self.robots):
+            ee = robot.getObservation_EE()
+            normalized_ee = self.normalize_cartesian_pose(ee)
+
+            init_js = robot.init_JS_pos
+            normalized_init_js = robot.normalize_JS(init_js)
+
+            init_ee = robot.init_pose
+            normalized_init_ee = self.normalize_cartesian_pose(init_ee)
+            goal_ee = robot.goal_pose
+            normalized_goal_ee = self.normalize_cartesian_pose(goal_ee)
+
+            dist_xyz = np.linalg.norm(init_ee[:3] - goal_ee[:3])
+            normalized_dist_xyz = np.linalg.norm(normalized_init_ee[:3] - normalized_goal_ee[:3])
+            dist_rz = np.linalg.norm(init_ee[3:] - goal_ee[3:])
+            normalized_dist_rz = np.linalg.norm(normalized_init_ee[3:] - normalized_goal_ee[3:])
+
+            is_picking = 0 if robot.item_picking is None else 1
+
+            robot_input = np.concatenate(
+                [init_js, init_ee, goal_ee, [dist_xyz], [dist_rz], [is_picking], normalized_init_js, normalized_init_ee,
+                 normalized_goal_ee, [normalized_dist_xyz], [normalized_dist_rz]])
+
+            robots_input.append(robot_input)
+
+            suss = robot.is_success
+            fail = robot.is_failed
+            acc_traj_length = robot.accumulated_dist + np.linalg.norm(ee[:3] - goal_ee[:3])
+            acc_traj_normalized_length = robot.accumulated_normalized_dist + np.linalg.norm(
+                normalized_ee[:3] - normalized_goal_ee[:3])
+            acc_step = robot.accumulated_step + 1 if not fail else self._maxSteps
+            acc_normalized_step = acc_step / self._maxSteps
+
+            robot_output = np.array(
+                [suss, fail, acc_traj_length, acc_step, acc_traj_normalized_length, acc_normalized_step])
+            robots_output.append(robot_output)
+
+        global_suss = all([output[0] for output in robots_output])
+        global_fail = any([output[1] for output in robots_output])
+        global_acc_traj_length = max([output[2] for output in robots_output])
+        global_acc_step = max([output[3] for output in robots_output])
+        global_acc_traj_normalized_length = max([output[4] for output in robots_output])
+        global_acc_normalized_step = max([output[5] for output in robots_output])
+        global_output = np.array(
+            [global_suss, global_fail, global_acc_traj_length, global_acc_step, global_acc_traj_normalized_length,
+             global_acc_normalized_step])
+
+        robots_input = np.concatenate([input for input in robots_input])
+        robots_output = np.concatenate([output for output in robots_output])
+        # print(len(robots_input))
+        # print(len(robots_output))
+        prediction_model_state_data = np.concatenate([robots_input,robots_output,global_output])
+        # print(len(prediction_model_state_data))
+        return prediction_model_state_data
 
 
 if parse_version(gym.__version__) < parse_version('0.9.6'):

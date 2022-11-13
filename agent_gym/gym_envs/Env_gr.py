@@ -271,6 +271,7 @@ class Env_gr(gym.GoalEnv):
 
             # check collision, regenerate init/goal poses if collides
             check = self.check_init_goal_poses()
+            # check = True
             if check:
                 for i, robot in enumerate(self.robots):
                     robot.reach_count = 0

@@ -57,13 +57,14 @@ if __name__ == '__main__':
     num_cpu = 24  # train_config['num_cpu']
     render = False
 
-    task_date = "1010"
-    task_name = "3M_data_24cpu"
+    task_date = "1109"
+    task_name = "no_failure/3M_data_24cpu"
     model_name = load_model_path.split("/")[-1]
     start_time = time.strftime("%Y-%m-%d-%H-%M-%S")
     save_path = "../../generated_datas/task_datas/{}/{}/{}/{}/".format(task_date, task_name, model_name, start_time)
     create_folder(save_path)
 
+    print("load model from path:\t", load_model_path)
     policy = PPO.load(load_model_path)
 
     env_name = train_config['env_name']
@@ -76,7 +77,7 @@ if __name__ == '__main__':
         env = None
 
     task_num = 10000
-    loop_num = 300
+    loop_num = 100
     total_num = task_num * loop_num
     data_size = 84
     time0 = time.time()
@@ -106,11 +107,12 @@ if __name__ == '__main__':
                         task_count += 1
                         succ_count += infos[index]['is_success/all']
 
-                        # print(task_count,index,succ_count)
+
                         if (task_count + 1) % pbar_update_freq == 0:
                             # print(task_count + 1)
                             pbar.update(pbar_update_freq)
                         if task_count >= task_num:
+                            # print(task_count,index,succ_count)
                             break
 
             # print(task_data)
@@ -120,6 +122,7 @@ if __name__ == '__main__':
                                                                                       (l + 1) * task_num))
             print("saved path:  ",save_path)
             print("time used:\t", time.time() - time0)
+            print("task_count:\t",task_count,"\tsucc count:\t",succ_count)
             print(" ")
 
     env.close()

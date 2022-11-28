@@ -92,18 +92,24 @@ if __name__ == "__main__":
     cost_types = ["coord_traj_length", "coord_steps", "coord_norm_traj_length", "coord_norm_steps"]
     obs_types = ["common", "ee_only", "norm_common", "norm_ee_only"]
     #### define input output type to use
-    cost_type = "coord_steps"
+    cost_type = "coord_traj_length"  # "coord_steps"
     obs_type = "ee_only"
 
     #### define task data to use
 
     task_data_path = "../../generated_datas/task_datas/1010/3M_data_24cpu/policy_0.1_gap/2022-10-10-23-30-56/"
     # task_data_path = "../../generated_datas/task_datas/1024/with_failure/3M_data_24cpu/policy_0.1_gap/2022-10-24-18-44-01/"
+    task_data_path = "../../generated_datas/task_datas/1109/no_failure/3M_data_24cpu/policy_0.1_gap/2022-11-09-22-39-41/"
+    # task_data_path = "../../generated_datas/task_datas/1109/with_failure/3M_data_24cpu/policy_0.1_gap/2022-11-09-22-39-13/"
 
     #### define prediction model to use
 
     cost_model_path = "../../generated_datas/good_models/cost/1109/succ_data_only_ee_only_predict_steps/2022-11-07-22-22-13.zip"
     mask_model_path = "../../generated_datas/good_models/mask/1107/ee_only_predict_suss/2022-11-07-01-51-09.zip"
+
+    cost_model_path = "../../generated_datas/good_models/cost/1116/ee_only_predict_steps/2022-11-16-19-10-44.pth"
+    cost_model_path = "../../generated_datas/good_models/cost/1116/ee_only_predict_tr_l/2022-11-16-21-42-41.pth"
+    mask_model_path = "../../generated_datas/good_models/mask/1116/ee_only_predict_suss/2022-11-16-20-46-16.pth"
 
     model = torch.load(cost_model_path).to(device)
     print("!!!!!!!!!!!!!!!!!!!!!!!!!1")
@@ -137,7 +143,7 @@ if __name__ == "__main__":
     task_datas = task_datas.astype(np.float32)
 
     ############################################################## preprocess data
-    task_datas = task_datas[task_datas["coord_suss"] == 1][task_datas["coord_steps"] >= 10]
+    # task_datas = task_datas[task_datas["coord_suss"] == 1][task_datas["coord_steps"] >= 10]
     ##############################################################################
     task_data_num = task_datas.shape[0]
     print("task num:\t", task_data_num)

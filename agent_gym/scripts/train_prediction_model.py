@@ -178,7 +178,7 @@ if __name__ == "__main__":
     save_date = time.strftime("%m%d")
     prediction_model_path = "../../generated_datas/prediction_models/"
     save_name = "1024_with_failure_task_datas_100_epochs/ee_only_predict_succ"
-    save_name = "1024_task_datas_100_epochs/true_succ_only_norm_ee_only_predict_norm_step"
+    save_name = "1109_w_failure_task_datas_100_epochs/true_succ_only_ee_only_predict_steps"
 
     batch_size = 512
     epochs = 100
@@ -186,6 +186,9 @@ if __name__ == "__main__":
     # define parameters
     task_data_path = "../../generated_datas/task_datas/1010/3M_data_24cpu/policy_0.1_gap/2022-10-10-23-30-56/"
     task_data_path = "../../generated_datas/task_datas/1024/with_failure/3M_data_24cpu/policy_0.1_gap/2022-10-24-18-44-01/"
+    task_data_path = "../../generated_datas/task_datas/1109/no_failure/3M_data_24cpu/policy_0.1_gap/2022-11-09-22-39-41/"
+    task_data_path = "../../generated_datas/task_datas/1109/with_failure/3M_data_24cpu/policy_0.1_gap/2022-11-09-22-39-13/"
+
     train_ratio = 0.8
     validation_ratio = 0.1
     test_ratio = 0.1
@@ -194,10 +197,11 @@ if __name__ == "__main__":
     features = task_features + policy_features
 
     input_features = task_features[6:17] + task_features[23:33] + task_features[39:50] + task_features[56:]
-    input_features = task_features[23:33] + task_features[56:]
+    # input_features = task_features[23:33] + task_features[56:]
 
-    output_features = policy_features[-3:-2]  # [-6:-4]  # [-1:]
-    output_features = policy_features[-1:]
+    output_features = policy_features[-6:-4]
+    # output_features = policy_features[-3:-2]  # [-6:-4]  # [-1:]
+    output_features = policy_features[-3:-2]
 
     input_shape = len(input_features)
     output_shape = len(output_features)
@@ -224,8 +228,8 @@ if __name__ == "__main__":
 
     task_datas = task_datas[task_datas["coord_suss"] == 1][task_datas["coord_steps"] >= 10]
 
-    # suss_t = task_datas[task_datas["coord_suss"] == 1]
-    # suss_f = task_datas[task_datas["coord_suss"] == 0]
+    # suss_t = task_datas[task_datas["coord_suss"] == 1][task_datas["coord_steps"] >= 10]
+    # suss_f = task_datas[task_datas["coord_fail"] == 1]
     # suss_t = suss_t[: suss_f.shape[0]]
 
     # task_datas = pd.concat([suss_t, suss_f], axis=0)
@@ -339,8 +343,8 @@ if __name__ == "__main__":
     )
     save_path = prediction_model_path + save_date + "/" + save_name + "/" + model_name + "/" + time.strftime("%Y-%m-%d-%H-%M-%S") + "/"
     create_folder(save_path + "model_saved/")
-    # get_acc = True
-    # get_acc = False
+    get_acc = True
+    get_acc = False
     # create model
 
     model = NeuralNetwork(input_shape, output_shape, w).to(device)

@@ -7,6 +7,7 @@ from torch import nn
 from stable_baselines3.common.policies import ActorCriticPolicy
 
 
+############################# custom AC policy
 
 class CustomActorCriticPolicy(ActorCriticPolicy):
     def __init__(
@@ -33,12 +34,97 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
             **kwargs,
         )
 
+        # Feature extractor
+        self.features_extractor = CustomFeatureExtractor(self.observation_space, **self.features_extractor_kwargs)
+        self.features_dim = self.features_extractor.features_dim
+
         # Action distribution
         self.action_dist = make_custom_proba_distribution_multidiscrete(action_space, use_sde=False, dist_kwargs=None)
         self._build(lr_schedule)
 
     def _build_mlp_extractor(self) -> None:
         self.mlp_extractor = CustomNetwork1(self.features_dim, self.mask_dim)
+
+
+
+#################################### custom feature extractor
+node_feature_dim = 23
+encode_latent_num_node = 128
+encode_latent_num_edge = 128
+
+from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
+class CustomFeatureExtractor(BaseFeaturesExtractor):
+    def __init__(self, observation_space: gym.spaces.Dict):
+
+        super(CustomFeatureExtractor, self).__init__(observation_space, features_dim=node_feature_dim)
+        # extractors = {}
+        # total_concat_size = 0
+        #
+        # for key, subspace in observation_space.spaces.items():
+        #     # print("total_concat_size:\t",key, subspace,total_concat_size)
+        #     if "node" in key:
+        #         # extractors[key] = nn.Linear(subspace.shape[0], 16)
+        #         # total_concat_size += 16
+        #     else:
+        #         # extractors[key] = nn.Linear(subspace.shape[0], 64)
+        #         # total_concat_size += 64
+        # self.extractors = nn.ModuleDict(extractors)
+        # self._features_dim = total_concat_size
+
+        node_shape = 0
+        node_num = 0
+        for key, subspace in observation_space.spaces.items():
+            if "node" in key:
+                node_shape = subspace.shape[0]
+            elif "task_edge_mask" in key:
+                node_num = subspace.shape[0]
+
+        extractors = {}
+        extractors['robot_1_node_encoder'] = nn.Linear(node_shape,encode_latent_num_node)
+        extractors['robot_2_node_encoder'] = nn.Linear(node_shape, encode_latent_num_node)
+
+        extractors['task_edge_encoder'] = nn.Linear(1, encode_latent_num_edge)
+        extractors['coop_edge_encoder'] = nn.Linear(1, encode_latent_num_edge)
+
+        self.extractors = nn.ModuleDict(extractors)
+        self._features_dim = encode_latent_num_node
+
+
+    def forward(self, observations) -> th.Tensor:
+        encoded_observation = {}
+        robot_1_node_tensor_list = []
+        robot_2_node_tensor_list = []
+
+        for key, obs in observations.items():
+
+            if "robot_1_node" in key:
+                node_obs = obs.reshape([obs.shape[0],1,obs.shape[1]])
+                robot_1_node_tensor_list.append(node_obs)
+            elif "robot_2_node" in key:
+                node_obs = obs.reshape([obs.shape[0], 1, obs.shape[1]])
+                robot_2_node_tensor_list.append(node_obs)
+            elif "mask" in key:
+                encoded_observation[key] = obs
+            elif "dist" in key:
+                task_edge_obs = obs.reshape([obs.shape[0],obs.shape[1],obs.shape[2],1])
+                encoded_observation[key] = self.extractors['task_edge_encoder'](task_edge_obs)
+            elif "cost" in key:
+                coop_edge_obs = obs.reshape([obs.shape[0], obs.shape[1], obs.shape[2], 1])
+                encoded_observation[key] = self.extractors['coop_edge_encoder'](coop_edge_obs)
+
+
+        robot_1_node_tensor = th.cat(robot_1_node_tensor_list, dim=1)
+        robot_2_node_tensor = th.cat(robot_2_node_tensor_list, dim=1)
+
+        encoded_observation["robot_1_node"] = self.extractors['robot_1_node_encoder'](robot_1_node_tensor)
+        encoded_observation["robot_2_node"] = self.extractors['robot_2_node_encoder'](robot_2_node_tensor)
+
+        return encoded_observation
+
+
+
+####################################3 custom actor critic network
+
 
 
 latent_num = 128
@@ -99,6 +185,13 @@ class CustomNetwork1(nn.Module):
 
     def forward_critic(self, features: th.Tensor) -> th.Tensor:
         return self.value_net(features)
+
+
+
+
+########################### custom distribution
+
+
 
 
 from stable_baselines3.common.distributions import Distribution, MultiCategoricalDistribution, DiagGaussianDistribution

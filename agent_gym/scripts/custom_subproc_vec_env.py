@@ -160,8 +160,8 @@ class CustomSubprocVecEnv(VecEnv):
 
         # pred_cost = torch.reshape(pred_cost, pred_cost.shape[:-1])
 
-        pred_cost = torch.sum(pred_cost, 1).numpy().reshape(unpred_cost.shape)
-        pred_mask = torch.multiply(pred_mask[:, 0, :], pred_mask[:, 1, :]).numpy().reshape(unpred_mask.shape)
+        pred_cost = torch.sum(pred_cost, 1).reshape(unpred_cost.shape).numpy().astype(np.float32)
+        pred_mask = torch.multiply(pred_mask[:, 0, :], pred_mask[:, 1, :]).reshape(unpred_mask.shape).numpy().astype(np.float32)
 
         # print("pred_cost.shape", pred_cost.shape)
         # print("pred_mask.shape", pred_mask.shape)
@@ -175,6 +175,7 @@ class CustomSubprocVecEnv(VecEnv):
     def update_cost_and_mask(self, obs):
         for remote,cost,mask in zip(self.remotes, obs['coop_edge_cost'], obs['coop_edge_mask']):
             remote.send(("update_prediction", [cost,mask]))
+
         return True
 
     ####!!!!!!!!!!!!!!!!!!!!!!!!!!! my func end ###############################################

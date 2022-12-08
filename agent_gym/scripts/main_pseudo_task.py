@@ -105,8 +105,8 @@ if __name__ == '__main__':
 
     # Train the agent
 
-    # model.learn(total_timesteps=task_config['total_timesteps'], tb_log_name=model_type,
-    #             callback=callback_episode_metrics)
+    model.learn(total_timesteps=task_config['total_timesteps'], tb_log_name=model_type,
+                callback=callback_episode_metrics)
 
     # Save the agent
     del model  # delete trained model to demonstrate loading

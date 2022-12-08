@@ -229,13 +229,13 @@ class Env_tasks(gym.GoalEnv):
         observation = {}
         for i in range(self.robots_num):
             for j in range(self.parts_num):
-                observation['robot_{}_node_{}'.format(i + 1, j + 1)] = robot_nodes[i][j]
-            observation['robot_{}_node_reset'.format(i + 1)] = robot_nodes[i][self.parts_num]
-            observation['robot_{}_task_edge_dist'.format(i + 1)] = robots_task_edge_dist[i]
-            observation['robot_{}_task_edge_mask'.format(i + 1)] = robots_task_edge_mask[i]
-        observation['coop_edge_cost'] = coop_edge_cost
-        observation['coop_edge_mask'] = coop_edge_mask
-        observation['prediction_inputs'] = prediction_inputs
+                observation['robot_{}_node_{}'.format(i + 1, j + 1)] = robot_nodes[i][j].astype(np.float32)
+            observation['robot_{}_node_reset'.format(i + 1)] = robot_nodes[i][self.parts_num].astype(np.float32)
+            observation['robot_{}_task_edge_dist'.format(i + 1)] = robots_task_edge_dist[i].astype(np.float32)
+            observation['robot_{}_task_edge_mask'.format(i + 1)] = robots_task_edge_mask[i].astype(np.float32)
+        observation['coop_edge_cost'] = coop_edge_cost.astype(np.float32)
+        observation['coop_edge_mask'] = coop_edge_mask.astype(np.float32)
+        observation['prediction_inputs'] = prediction_inputs.astype(np.float32)
 
         return observation
 

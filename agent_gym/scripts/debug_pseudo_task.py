@@ -30,6 +30,7 @@ from torch import nn
 from prediction_model import Prediction_Model, get_features, NeuralNetwork
 from custom_subproc_vec_env import CustomSubprocVecEnv
 
+from model_utils_task import CustomFeatureExtractor
 
 
 def make_env(task_config):
@@ -38,6 +39,7 @@ def make_env(task_config):
         return env
 
     return _init
+
 
 if __name__ == "__main__":
     ## set gpu
@@ -60,17 +62,14 @@ if __name__ == "__main__":
     # cost_shape = len(cost_features)
     # mask_shape = len(mask_features)
 
-
-
     ######################## test a full episode with prediction
     task_config = load_config()
-    num_cpu = 2
+    num_cpu = 20
 
-    env = CustomSubprocVecEnv(
-        [make_env(task_config) for i in range(num_cpu)])
+    env = CustomSubprocVecEnv([make_env(task_config) for i in range(num_cpu)])
     env.load_prediction_model(prediction_model, input_type=obs_type, output_type=cost_type)
 
-    # obs = env.reset()
+    obs = env.reset()
     # z_o = []
     # z_a = []
     # z_r = []
@@ -88,15 +87,37 @@ if __name__ == "__main__":
     #     if dones[0]:
     #         break
 
+    ################ test feature extractor
+    from stable_baselines3.common.utils import get_device, is_vectorized_observation, obs_as_tensor
+
+    obs = env.reset()
+    obs_space = env.observation_space
+    fearure_extractor = CustomFeatureExtractor(obs_space)
+    print(fearure_extractor.extractors)
+
+    observation  = {}
+    for key, _ in obs.items():
+        # print(obs[key])
+        obs_ = np.array(obs[key])
+        obs_ = obs_.reshape((-1,) + obs_space[key].shape)
+        observation[key] = torch.as_tensor(obs_).to("cpu")
+
+    # observation = obs_as_tensor(observation,'cpu')
+
+    encoded_obs = fearure_extractor.forward(observation)
+
+    results = {}
+    for key, _ in encoded_obs.items():
+        results[key] = encoded_obs[key].cpu().detach().numpy()
 
     ################# test action sample
 
-    env0 = Env_tasks(task_config)
+    # env0 = Env_tasks(task_config)
 
-    act1 = env0.action_space.sample()
-    act2 = env.sample_action()
+    # act1 = env0.action_space.sample()
+    # act2 = env.sample_action()
 
-
+    #################
 
     #################################################################################### test custom subproc env
     # train_config, env_config = load_config()
@@ -113,10 +134,6 @@ if __name__ == "__main__":
     # # print("acts",acts)
     # print("##########")
     # obs2, rews, dones, infos = env.step(acts)
-
-
-
-
 
     ##################################################################################### test prediction model
 

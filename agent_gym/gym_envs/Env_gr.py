@@ -259,6 +259,9 @@ class Env_gr(gym.GoalEnv):
                 self.release_all_parts()
                 self.mount_parts()
             for i, robot in enumerate(self.robots):
+                robot.start_conf = None
+                robot.end_conf = None
+
                 if robot.is_success and np.random.random() < 0.5:
                     reset_init_pos = False
                 else:
@@ -318,16 +321,12 @@ class Env_gr(gym.GoalEnv):
             for i, robot in enumerate(self.robots):
                 act = action[j:j + self.action_dim]
                 a.append(act)
-                # #### use heuristics action
-                # if self._evaluate:
-                #     if i == 2:
-                #         act = robot.calculStraightAction2Goal(robot.goal)
-                #         act = np.array(act) * 0.5
                 if robot.is_success:
                     robot.applyAction(act, use_reset=False)
                 else:
                     robot.applyAction(act, use_reset=use_reset)
                 j += self.action_dim
+
         ######## update bullet env
         self._p.stepSimulation()
         if self._renders:
@@ -855,6 +854,9 @@ class Env_gr(gym.GoalEnv):
             if self._renders:
                 print("initialization failed in goal_pose reset, redo robot reset")
             return False
+        else:
+            for robot in self.robots:
+                robot.end_conf = robot.getObservation_JS()
         ######## check collision for init poses
         for robot in self.robots:
             robot.initialize_by_EE_pose(robot.init_EE_pos)
@@ -867,6 +869,9 @@ class Env_gr(gym.GoalEnv):
             if self._renders:
                 print("initialization failed in init_pose reset, redo robot reset")
             return False
+        else:
+            for robot in self.robots:
+                robot.start_conf = robot.getObservation_JS()
         return True
 
     def normalize_cartesian_pose(self, cartesian_pose, normalize_orn=False):
@@ -1247,7 +1252,7 @@ class Env_gr(gym.GoalEnv):
         robots_output = np.concatenate([output for output in robots_output])
         # print(len(robots_input))
         # print(len(robots_output))
-        prediction_model_state_data = np.concatenate([robots_input,robots_output,global_output])
+        prediction_model_state_data = np.concatenate([robots_input, robots_output, global_output])
         # print(len(prediction_model_state_data))
         return prediction_model_state_data
 

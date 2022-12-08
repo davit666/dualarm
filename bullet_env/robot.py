@@ -283,6 +283,19 @@ class Robot:
             else:
                 commands_JS = [self.jointsStates[i] + motorCommands[i] for i in range(len(self.jointsStates))]
                 self.initialize_by_JS_pose(commands_JS)
+    def applyTrajAction(self, trajCommands, use_reset=False):
+        commands_JS = trajCommands
+        if not use_reset:
+            for i in range(len(trajCommands)):
+                idx = self.jointsInfos[i][0]
+                command = commands_JS[i]
+                p.setJointMotorControl2(bodyUniqueId=self.robotUid,
+                                        jointIndex=idx,
+                                        controlMode=p.POSITION_CONTROL,
+                                        targetPosition=command,
+                                        )
+        else:
+            self.initialize_by_JS_pose(commands_JS)
 
     def calculStraightAction2Goal(self, goal, type="ee", commands_scale=None):
         commands_scale = commands_scale if commands_scale is not None else self.default_commands_scale

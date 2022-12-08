@@ -76,8 +76,8 @@ def get_features():
         for ef in eva_feature:
             policy_features.append(k + "_" + ef)
 
-    print("task_features:\t", len(task_features), task_features)
-    print("policy features:\t", len(policy_features), policy_features)
+    # print("task_features:\t", len(task_features), task_features)
+    # print("policy features:\t", len(policy_features), policy_features)
     return task_features, policy_features
 
 
@@ -145,9 +145,15 @@ class Prediction_Model():
     def predict_cost(self, x):
         # x = x.to(self.device)
         pred_cost = self.cost_prediction_model.forward(x)#.item()
-        return pred_cost
+        return torch.reshape(pred_cost, pred_cost.shape[:-1])
 
     def predict_mask(self, x):
+        dim = len(x.shape)
+        print(dim)
+        # x = x.to(self.device)
+        pred_mask = self.mask_prediction_model.forward(x).argmax(dim = dim - 1)
+        return pred_mask
+    def predict_correct(self, x):
         # x = x.to(self.device)
         pred_mask = self.mask_prediction_model.forward(x).argmax(1)
         mask_shape = list(pred_mask.shape)[0]

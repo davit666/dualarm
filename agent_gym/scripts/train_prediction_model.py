@@ -42,8 +42,8 @@ class NeuralNetwork(nn.Module):
         self.linear_relu_stack = nn.Sequential(
             nn.Linear(input_shape, w),
             nn.ReLU(),
-            # nn.Linear(w, w),
-            # nn.ReLU(),
+            nn.Linear(w, w),
+            nn.ReLU(),
             # nn.Linear(w, w),
             # nn.ReLU(),
             nn.Linear(w, w),
@@ -177,17 +177,18 @@ if __name__ == "__main__":
     # define save name and basic status
     save_date = time.strftime("%m%d")
     prediction_model_path = "../../generated_datas/prediction_models/"
-    save_name = "1024_with_failure_task_datas_100_epochs/ee_only_predict_succ"
-    save_name = "1109_w_failure_task_datas_100_epochs/true_succ_only_ee_only_predict_steps"
+    save_name = "1024_with_failure_task_datas_100_epochs/norm_ee_only_predict_succ"
+    save_name = "1010_task_datas_100_epochs/norm_ee_only_succ_only_predict_step"
+    # save_name = "1109_w_failure_task_datas_100_epochs/true_succ_only_ee_only_predict_steps"
 
     batch_size = 512
     epochs = 100
 
     # define parameters
     task_data_path = "../../generated_datas/task_datas/1010/3M_data_24cpu/policy_0.1_gap/2022-10-10-23-30-56/"
-    task_data_path = "../../generated_datas/task_datas/1024/with_failure/3M_data_24cpu/policy_0.1_gap/2022-10-24-18-44-01/"
-    task_data_path = "../../generated_datas/task_datas/1109/no_failure/3M_data_24cpu/policy_0.1_gap/2022-11-09-22-39-41/"
-    task_data_path = "../../generated_datas/task_datas/1109/with_failure/3M_data_24cpu/policy_0.1_gap/2022-11-09-22-39-13/"
+    # task_data_path = "../../generated_datas/task_datas/1024/with_failure/3M_data_24cpu/policy_0.1_gap/2022-10-24-18-44-01/"
+    # task_data_path = "../../generated_datas/task_datas/1109/no_failure/3M_data_24cpu/policy_0.1_gap/2022-11-09-22-39-41/"
+    # task_data_path = "../../generated_datas/task_datas/1109/with_failure/3M_data_24cpu/policy_0.1_gap/2022-11-09-22-39-13/"
 
     train_ratio = 0.8
     validation_ratio = 0.1
@@ -196,8 +197,8 @@ if __name__ == "__main__":
     task_features, policy_features = get_features()
     features = task_features + policy_features
 
-    input_features = task_features[6:17] + task_features[23:33] + task_features[39:50] + task_features[56:]
-    # input_features = task_features[23:33] + task_features[56:]
+    # input_features = task_features[6:17] + task_features[23:33] + task_features[39:50] + task_features[56:]
+    input_features = task_features[23:33] + task_features[56:]
 
     output_features = policy_features[-6:-4]
     # output_features = policy_features[-3:-2]  # [-6:-4]  # [-1:]
@@ -205,7 +206,7 @@ if __name__ == "__main__":
 
     input_shape = len(input_features)
     output_shape = len(output_features)
-
+    #####################################################################################################$$$$$$$$$$$$$$$$$$$$$$$$$$$
     # load task datas
     task_data_file_names = os.listdir(task_data_path)
     task_data_file_num = len(task_data_file_names)
@@ -239,7 +240,7 @@ if __name__ == "__main__":
 
     print("task num:\t", task_data_num)
     # print(task_datas)
-
+    ########################################################$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
     # create train, evaluate, test data set
 
     train_data_num = int(task_data_num * train_ratio)
@@ -268,10 +269,7 @@ if __name__ == "__main__":
     ###############################################################################################################
     # define network
     w = 64
-    model_name = "{}-{}_ce_adam_rl1e-3_batch_512".format(
-        w,
-        w,
-    )
+    model_name = "{}-{}-{}_ce_adam_rl1e-3_batch_512".format(w, w, w)
     save_path = prediction_model_path + save_date + "/" + save_name + "/" + model_name + "/" + time.strftime("%Y-%m-%d-%H-%M-%S") + "/"
     create_folder(save_path + "model_saved/")
     get_acc = True
@@ -300,7 +298,7 @@ if __name__ == "__main__":
         y_train_correct.append(tr_acc)
         y_validation_correct.append(vl_acc)
 
-        torch.save(model, save_path + "model_saved/" + time.strftime("%Y-%m-%d-%H-%M-%S") + ".zip")
+        torch.save(model, save_path + "model_saved/" + time.strftime("%Y-%m-%d-%H-%M-%S") + ".pth")
         print("time used:\t", time.time() - time0)
 
     print("Done!")
@@ -337,10 +335,7 @@ if __name__ == "__main__":
     ###############################################################################################################
     # define network
     w = 128
-    model_name = "{}-{}_ce_adam_rl1e-3_batch_512".format(
-        w,
-        w,
-    )
+    model_name = "{}-{}-{}_ce_adam_rl1e-3_batch_512".format(w, w, w)
     save_path = prediction_model_path + save_date + "/" + save_name + "/" + model_name + "/" + time.strftime("%Y-%m-%d-%H-%M-%S") + "/"
     create_folder(save_path + "model_saved/")
     get_acc = True
@@ -369,7 +364,7 @@ if __name__ == "__main__":
         y_train_correct.append(tr_acc)
         y_validation_correct.append(vl_acc)
 
-        torch.save(model, save_path + "model_saved/" + time.strftime("%Y-%m-%d-%H-%M-%S") + ".zip")
+        torch.save(model, save_path + "model_saved/" + time.strftime("%Y-%m-%d-%H-%M-%S") + ".pth")
         print("time used:\t", time.time() - time0)
 
     print("Done!")
@@ -406,10 +401,7 @@ if __name__ == "__main__":
     ###############################################################################################################
     # define network
     w = 256
-    model_name = "{}-{}_ce_adam_rl1e-3_batch_512".format(
-        w,
-        w,
-    )
+    model_name = "{}-{}-{}_ce_adam_rl1e-3_batch_512".format(w, w, w)
     save_path = prediction_model_path + save_date + "/" + save_name + "/" + model_name + "/" + time.strftime("%Y-%m-%d-%H-%M-%S") + "/"
     create_folder(save_path + "model_saved/")
     get_acc = True
@@ -438,7 +430,7 @@ if __name__ == "__main__":
         y_train_correct.append(tr_acc)
         y_validation_correct.append(vl_acc)
 
-        torch.save(model, save_path + "model_saved/" + time.strftime("%Y-%m-%d-%H-%M-%S") + ".zip")
+        torch.save(model, save_path + "model_saved/" + time.strftime("%Y-%m-%d-%H-%M-%S") + ".pth")
         print("time used:\t", time.time() - time0)
 
     print("Done!")
@@ -475,10 +467,7 @@ if __name__ == "__main__":
     ###############################################################################################################
     # define network
     w = 512
-    model_name = "{}-{}_ce_adam_rl1e-3_batch_512".format(
-        w,
-        w,
-    )
+    model_name = "{}-{}-{}_ce_adam_rl1e-3_batch_512".format(w, w, w)
     save_path = prediction_model_path + save_date + "/" + save_name + "/" + model_name + "/" + time.strftime("%Y-%m-%d-%H-%M-%S") + "/"
     create_folder(save_path + "model_saved/")
     get_acc = True

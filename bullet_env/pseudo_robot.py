@@ -14,6 +14,7 @@ class PseudoPart():
     def __init__(self):
         self.success_dist_threshold = 0.1
         self.sucking_space = 0.075
+        self.lift_height = 0.1
         self.part_size = np.array([0.5, 0.1, 0.05])
 
         self.init_pos = None
@@ -37,9 +38,9 @@ class PseudoPart():
     def resetInitPose(self, pos, orn, reset_by_ee_pose=False):
         self.init_pos = pos
         self.init_orn = orn
-        self.init_pos[2] += self.part_size[2] / 2.0 + self.sucking_space
+        self.init_pos[2] += self.part_size[2] / 2.0 + self.sucking_space + self.lift_height
 
-        self.init_pose = np.concatenate([self.init_pos, self.init_orn])
+        self.init_pose = np.concatenate([self.init_pos, p.getEulerFromQuaternion(self.init_orn)[-1:]])
 
         self.pose = self.init_pose.copy()
         # self.checkIsPlaced()
@@ -47,16 +48,22 @@ class PseudoPart():
     def resetGoalPose(self, pos, orn):
         self.goal_pos = pos
         self.goal_orn = orn
-        self.goal_pos[2] += self.part_size[2] / 2.0 + self.sucking_space
+        self.goal_pos[2] += self.part_size[2] / 2.0 + self.sucking_space + self.lift_height
 
-        self.goal_pose = np.concatenate([self.goal_pos, self.goal_orn])
+        self.goal_pose = np.concatenate([self.goal_pos, p.getEulerFromQuaternion(self.goal_orn)[-1:]])
 
     def getPose(self):
         assert self.pose is not None
-        return self.pose.copy()
+
+        pose =np.array(self.pose.copy())
+
+        return pose
     def getGoalPose(self):
-        assert self.goal_pos is not None
-        return self.pose.copy()
+        assert self.goal_pose is not None
+
+        pose = np.array(self.goal_pose.copy())
+
+        return pose
 
     # def picked(self, robot):
     #     assert self.picked_robot is None
@@ -76,8 +83,8 @@ class PseudoPart():
 ROBOT_NAME_LIST = ["abb", "kawasaki", "ur5"]
 
 
-class PseudoRobot():
-    def __int__(self, robotName="abb", urdfRootPath=os.path.join(currentdir, "urdf_model")):
+class PseudoRobot:
+    def __init__(self, robotName="abb", urdfRootPath=os.path.join(currentdir, "urdf_model")):
         self.urdfRootPath = urdfRootPath
         # self.timeStep = timeStep
         self.useInverseKinematics = True
@@ -150,6 +157,7 @@ class PseudoRobot():
         self.placing_count = 0
 
         self.current_pose = None
+        self.is_done = False
 
         return True
 
@@ -160,7 +168,7 @@ class PseudoRobot():
             self.initialize_by_EE_pose(self.init_EE_pos)
 
         self.resetGoalPose(goal_pos)
-        self.resetInitPose(default_pose=False)
+        self.resetInitPose(default_pose=True)
         # self.init_JS_pos = self.getObservation_JS()
         self.sucking = False
         self.is_success = False
@@ -185,7 +193,7 @@ class PseudoRobot():
     def resetInitPose(self, init_pose=None, default_pose=True):
         if default_pose:
             self.init_EE_pos = self.default_goal_pose.copy()
-            self.init_pose = np.concatenate((self.init_EE_pos[:3], p.getEulerFromQuaternion(self.goal_EE_pos[3:])[
+            self.init_pose = np.concatenate((self.init_EE_pos[:3], p.getEulerFromQuaternion(self.init_EE_pos[3:])[
                                                                    -1:])) if self.useInverseKinematics else self.init_EE_pos
         elif init_pose is not None:
             self.init_pose = init_pose

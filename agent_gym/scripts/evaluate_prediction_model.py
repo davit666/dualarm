@@ -92,8 +92,8 @@ if __name__ == "__main__":
     cost_types = ["coord_traj_length", "coord_steps", "coord_norm_traj_length", "coord_norm_steps"]
     obs_types = ["common", "ee_only", "norm_common", "norm_ee_only"]
     #### define input output type to use
-    cost_type = "coord_traj_length"  # "coord_steps"
-    obs_type = "ee_only"
+    cost_type = "coord_steps"  # "coord_steps"
+    obs_type = "norm_ee_only"
 
     #### define task data to use
 
@@ -104,14 +104,17 @@ if __name__ == "__main__":
 
     #### define prediction model to use
 
-    cost_model_path = "../../generated_datas/good_models/cost/1109/succ_data_only_ee_only_predict_steps/2022-11-07-22-22-13.zip"
-    mask_model_path = "../../generated_datas/good_models/mask/1107/ee_only_predict_suss/2022-11-07-01-51-09.zip"
+    # cost_model_path = "../../generated_datas/good_models/cost/1109/succ_data_only_ee_only_predict_steps/2022-11-07-22-22-13.zip"
+    # mask_model_path = "../../generated_datas/good_models/mask/1107/ee_only_predict_suss/2022-11-07-01-51-09.zip"
 
-    cost_model_path = "../../generated_datas/good_models/cost/1116/ee_only_predict_steps/2022-11-16-19-10-44.pth"
-    cost_model_path = "../../generated_datas/good_models/cost/1116/ee_only_predict_tr_l/2022-11-16-21-42-41.pth"
-    mask_model_path = "../../generated_datas/good_models/mask/1116/ee_only_predict_suss/2022-11-16-20-46-16.pth"
+    # cost_model_path = "../../generated_datas/good_models/cost/1116/ee_only_predict_steps/2022-11-16-19-10-44.pth"
+    # cost_model_path = "../../generated_datas/good_models/cost/1116/ee_only_predict_tr_l/2022-11-16-21-42-41.pth"
+    # mask_model_path = "../../generated_datas/good_models/mask/1116/ee_only_predict_suss/2022-11-16-20-46-16.pth"
 
-    model = torch.load(cost_model_path).to(device)
+    cost_model_path = "../../generated_datas/good_models/cost/1203/1010_task_datas_100_epochs/norm_ee_only_succ_only_predict_step/512-512-512_ce_adam_rl1e-3_batch_512/2022-12-02-13-13-04/model_saved/2022-12-02-14-04-40.pth"
+    mask_model_path = "../../generated_datas/good_models/mask/1203/1024_with_failure_task_datas_100_epochs/norm_ee_only_predict_succ/256-256-256_ce_adam_rl1e-3_batch_512/2022-12-02-11-47-26/model_saved/2022-12-02-12-29-48.pth"
+
+    # model = torch.load(cost_model_path).to(device)
     print("!!!!!!!!!!!!!!!!!!!!!!!!!1")
     #### load prediction model
     prediction_model = Prediction_Model(obs_type=obs_type, cost_type=cost_type, cost_model_path=cost_model_path, mask_model_path=mask_model_path)
@@ -143,7 +146,7 @@ if __name__ == "__main__":
     task_datas = task_datas.astype(np.float32)
 
     ############################################################## preprocess data
-    # task_datas = task_datas[task_datas["coord_suss"] == 1][task_datas["coord_steps"] >= 10]
+    task_datas = task_datas[task_datas["coord_suss"] == 1][task_datas["coord_steps"] >= 10]
     ##############################################################################
     task_data_num = task_datas.shape[0]
     print("task num:\t", task_data_num)

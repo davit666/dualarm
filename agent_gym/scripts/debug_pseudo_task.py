@@ -30,7 +30,7 @@ from torch import nn
 from prediction_model import Prediction_Model, get_features, NeuralNetwork
 from custom_subproc_vec_env import CustomSubprocVecEnv
 
-from model_utils_task import CustomFeatureExtractor
+from model_utils_task import CustomFeatureExtractor, CustomNetwork_FlattenNodes, make_custom_proba_distribution_multidiscrete
 
 
 def make_env(task_config):
@@ -55,7 +55,8 @@ if __name__ == "__main__":
 
     print("!!!!!!!!!!!!!!!!!!!!!!!!!1")
     #### load prediction model
-    prediction_model = Prediction_Model(obs_type=obs_type, cost_type=cost_type, cost_model_path=cost_model_path, mask_model_path=mask_model_path)
+    prediction_model = Prediction_Model(obs_type=obs_type, cost_type=cost_type, cost_model_path=cost_model_path,
+                                        mask_model_path=mask_model_path)
     # input_features, cost_features, mask_features = prediction_model.get_input_and_output()
     #
     # input_shape = len(input_features)
@@ -90,12 +91,23 @@ if __name__ == "__main__":
     ################ test feature extractor
     from stable_baselines3.common.utils import get_device, is_vectorized_observation, obs_as_tensor
 
-    obs = env.reset()
+    # feature extractor
     obs_space = env.observation_space
-    fearure_extractor = CustomFeatureExtractor(obs_space)
-    print(fearure_extractor.extractors)
+    feature_extractor = CustomFeatureExtractor(obs_space)
+    print("feature extractor:\n", feature_extractor.extractors)
 
-    observation  = {}
+    # custom net flatten nodes
+    node_feature_dim = feature_extractor._features_dim
+    mask_dim = feature_extractor.mask_dim
+    net_fn = CustomNetwork_FlattenNodes(node_feature_dim, mask_dim)
+    print("flatten network:\n", net_fn)
+
+    # distribution
+    action_space = env.action_space
+    action_dist = make_custom_proba_distribution_multidiscrete(action_space)
+
+    obs = env.reset()
+    observation = {}
     for key, _ in obs.items():
         # print(obs[key])
         obs_ = np.array(obs[key])
@@ -104,11 +116,21 @@ if __name__ == "__main__":
 
     # observation = obs_as_tensor(observation,'cpu')
 
-    encoded_obs = fearure_extractor.forward(observation)
+    encoded_obs = feature_extractor.forward(observation)
+    pi_logits, vf_logits = net_fn.forward(encoded_obs)
 
     results = {}
     for key, _ in encoded_obs.items():
         results[key] = encoded_obs[key].cpu().detach().numpy()
+
+    distribution = action_dist.proba_distribution(action_logits=pi_logits)
+    actions = distribution.get_actions(deterministic=True)
+
+    actions = actions.cpu().detach().numpy()
+    pi_logits, vf_logits = pi_logits.cpu().detach().numpy(), vf_logits.cpu().detach().numpy()
+
+    obs2, rews, dones, infos = env.step(actions)
+
 
     ################# test action sample
 

@@ -468,7 +468,7 @@ class Env_tasks(gym.GoalEnv):
             allocator_action = self.sample_allocator_action(allocator_action)
 
         # apply_action
-        cost = self.apply_action(allocator_action)
+        cost, check = self.apply_action(allocator_action)
         self.accumulated_cost += cost
         # get new observation without cost_updated
         observation = self._observation()
@@ -493,6 +493,7 @@ class Env_tasks(gym.GoalEnv):
             episode_info['6_global_success'] = self.success
         else:
             episode_info = {}
+            episode_info['7_status/correct_check'] = check
         return observation, reward, done, episode_info
 
     def sample_allocator_action(self, allocator_action):
@@ -508,6 +509,7 @@ class Env_tasks(gym.GoalEnv):
 
     def apply_action(self, allocator_action):
         cost = 0
+        check = None
         assert self.prediction_updated
         if self._renders:
             print("allocator action:\t",allocator_action)
@@ -518,6 +520,7 @@ class Env_tasks(gym.GoalEnv):
             coop_mask = 0
 
         if coop_mask == 0:
+            check = 0
             if self._renders:
                 print("wrong action")
             # freeze action and get max cost
@@ -525,6 +528,7 @@ class Env_tasks(gym.GoalEnv):
                 robot.wrong_allocation += 1
             cost = self.max_cost_const
         else:
+            check = 1
             if self._renders:
                 print("correct action")
             # assign robot goal and execute action
@@ -552,7 +556,7 @@ class Env_tasks(gym.GoalEnv):
         # update succ parts num
         self.succ_parts_num = sum(part.is_success for part in self.parts)
 
-        return cost
+        return cost, check
 
     def _reward(self, cost):
         reward = - cost / self.max_cost_const

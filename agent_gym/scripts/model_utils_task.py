@@ -20,7 +20,7 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
             *args,
             **kwargs,
     ):
-        self.mask_dim = sum(action_space.nvec)
+
         # self.mask_dim = get_action_dim(action_space)
         print("@@@@@@@@@@@@@@@@@@@@@@@@@", self.mask_dim)
         super(CustomActorCriticPolicy, self).__init__(
@@ -36,14 +36,16 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
 
         # Feature extractor
         self.features_extractor = CustomFeatureExtractor(self.observation_space, **self.features_extractor_kwargs)
-        self.features_dim = self.features_extractor.features_dim
+        self.node_feature_dim = self.features_extractor._features_dim
+        self.mask_dim = self.features_extractor.mask_dim
+
 
         # Action distribution
         self.action_dist = make_custom_proba_distribution_multidiscrete(action_space, use_sde=False, dist_kwargs=None)
         self._build(lr_schedule)
 
     def _build_mlp_extractor(self) -> None:
-        self.mlp_extractor = CustomNetwork1(self.features_dim, self.mask_dim)
+        self.mlp_extractor = CustomNetwork_FlattenNodes(self.node_feature_dim, self.mask_dim)
 
 
 
@@ -57,31 +59,20 @@ class CustomFeatureExtractor(BaseFeaturesExtractor):
     def __init__(self, observation_space: gym.spaces.Dict):
 
         super(CustomFeatureExtractor, self).__init__(observation_space, features_dim=node_feature_dim)
-        # extractors = {}
-        # total_concat_size = 0
-        #
-        # for key, subspace in observation_space.spaces.items():
-        #     # print("total_concat_size:\t",key, subspace,total_concat_size)
-        #     if "node" in key:
-        #         # extractors[key] = nn.Linear(subspace.shape[0], 16)
-        #         # total_concat_size += 16
-        #     else:
-        #         # extractors[key] = nn.Linear(subspace.shape[0], 64)
-        #         # total_concat_size += 64
-        # self.extractors = nn.ModuleDict(extractors)
-        # self._features_dim = total_concat_size
 
-        node_shape = 0
-        node_num = 0
+
+        self.node_feature_dim = 0
+        self.mask_dim = 0
+        self._features_dim = encode_latent_num_node
         for key, subspace in observation_space.spaces.items():
             if "node" in key:
-                node_shape = subspace.shape[0]
+                self.node_feature_dim = subspace.shape[0]
             elif "task_edge_mask" in key:
-                node_num = subspace.shape[0]
+                self.mask_dim = subspace.shape[0]
 
         extractors = {}
-        extractors['robot_1_node_encoder'] = nn.Linear(node_shape,encode_latent_num_node)
-        extractors['robot_2_node_encoder'] = nn.Linear(node_shape, encode_latent_num_node)
+        extractors['robot_1_node_encoder'] = nn.Linear(self.node_feature_dim,encode_latent_num_node)
+        extractors['robot_2_node_encoder'] = nn.Linear(self.node_feature_dim, encode_latent_num_node)
 
         extractors['task_edge_encoder'] = nn.Linear(1, encode_latent_num_edge)
         extractors['coop_edge_encoder'] = nn.Linear(1, encode_latent_num_edge)
@@ -127,13 +118,12 @@ class CustomFeatureExtractor(BaseFeaturesExtractor):
 
 
 
-latent_num = 128
+latent_dim = 128
 
 
-class CustomNetwork1(nn.Module):
+class CustomNetwork_FlattenNodes(nn.Module):
     """
-    Custom network for policy and value function.
-    It receives as input the features extracted by the feature extractor.
+    this network flatten all node observations and use mlp to decode, action mask is added
 
     :param feature_dim: dimension of the features extracted with the features_extractor (e.g. features from a CNN)
     :param last_layer_dim_pi: (int) number of units for the last layer of the policy network
@@ -142,49 +132,70 @@ class CustomNetwork1(nn.Module):
 
     def __init__(
             self,
-            feature_dim: int,
+            node_feature_dim: int,
             mask_dim: int,
-            last_layer_dim_pi: int = latent_num,
-            last_layer_dim_vf: int = latent_num,
+            last_layer_dim_pi: int = latent_dim,
+            last_layer_dim_vf: int = latent_dim,
     ):
-        super(CustomNetwork1, self).__init__()
+        super(CustomNetwork_FlattenNodes, self).__init__()
 
         # IMPORTANT:
-        self.feature_dim = feature_dim
+        self.node_feature_dim = node_feature_dim
         self.mask_dim = mask_dim
         # Save output dimensions, used to create the distributions
-        self.latent_dim_pi = last_layer_dim_pi + self.mask_dim
-        self.latent_dim_vf = last_layer_dim_vf
+        self.latent_dim_pi = self.mask_dim * 2
+        self.latent_dim_vf = 64
 
+        flatten_node_dim = self.node_feature_dim * self.mask_dim * 2
         # Policy network
         self.policy_net = nn.Sequential(
-            nn.Linear(feature_dim, latent_num), nn.ReLU(),
-            nn.Linear(latent_num, last_layer_dim_pi), nn.ReLU(),
+            nn.Linear(flatten_node_dim, latent_dim), nn.ReLU(),
+            nn.Linear(latent_dim, latent_dim), nn.ReLU(),
+            nn.Linear(latent_dim,self.mask_dim*2)
         )
         # Value network
         self.value_net = nn.Sequential(
-            nn.Linear(feature_dim, latent_num), nn.ReLU(),
-            nn.Linear(latent_num, last_layer_dim_vf), nn.ReLU(),
+            nn.Linear(flatten_node_dim, latent_dim), nn.ReLU(),
+            nn.Linear(latent_dim, latent_dim), nn.ReLU(),
         )
+    def flatten(self,  features: th.Tensor) -> th.Tensor:
+        f_r1 = th.flatten(features["robot_1_node"],1,2)
+        f_r2 = th.flatten(features["robot_2_node"],1,2)
 
-    def forward(self, features: th.Tensor) -> Tuple[th.Tensor, th.Tensor]:
+        return th.cat([f_r1, f_r2], dim=1)
+    def mask_action(self,features,action):
+        assert action.shape[1] == self.mask_dim * 2
+
+        mask = th.cat([features["robot_1_task_edge_mask"], features["robot_2_task_edge_mask"]], dim=1)
+        mask = th.add(mask, -1)
+        mask = mask.mul(10000)
+
+        masked_action = th.add(action, mask)
+
+        return masked_action
+
+    def forward(self, features: th.Tensor) -> th.Tensor:
         """
         :return: (th.Tensor, th.Tensor) latent_policy, latent_value of the specified network.
             If all layers are shared, then ``latent_policy == latent_value``
         """
-        _, mask = th.split(features, [self.feature_dim - self.mask_dim, self.mask_dim], dim=1)
-        output_pi = self.policy_net(features)
-        output_pi = th.cat((output_pi, mask), 1)
-        return output_pi, self.value_net(features)
+        flatten_feature = self.flatten(features)
+
+        unmasked_action = self.policy_net(flatten_feature)
+        masked_action = self.mask_action(features, unmasked_action)
+
+        return masked_action, self.value_net(flatten_feature)
 
     def forward_actor(self, features: th.Tensor) -> th.Tensor:
-        _, mask = th.split(features, [self.feature_dim - self.mask_dim, self.mask_dim], dim=1)
-        output_pi = self.policy_net(features)
-        output_pi = th.cat((output_pi, mask), 1)
-        return output_pi
+        flatten_feature = self.flatten(features)
+
+        unmasked_action = self.policy_net(flatten_feature)
+        masked_action = self.mask_action(features, unmasked_action)
+        return masked_action
 
     def forward_critic(self, features: th.Tensor) -> th.Tensor:
-        return self.value_net(features)
+        flatten_feature = self.flatten(features)
+        return self.value_net(flatten_feature)
 
 
 
@@ -200,43 +211,56 @@ from torch.distributions import Bernoulli, Categorical, Normal
 import numpy as np
 
 
-class CustomMaskedLinear(nn.Module):
+
+
+### multidiscrete output
+
+# class CustomMaskedLinear(nn.Module):
+#     def __init__(self, latent_dim, action_dim):
+#         super(CustomMaskedLinear, self).__init__()
+#         assert latent_dim - action_dim == latent_num, "latent_dim:{} and action_dim:{} must diff latent_num".format(
+#             latent_dim, action_dim)
+#         self.latent_dim = latent_dim
+#         self.action_dim = action_dim
+#         self.linear = nn.Linear(self.latent_dim - self.action_dim, self.action_dim)
+#
+#     def forward(self, x):
+#         latent, mask = th.split(x, [self.latent_dim - self.action_dim, self.action_dim], dim=1)
+#
+#         output = self.linear(latent)
+#         mask = th.add(mask, -1)
+#         mask = mask.mul(10000)
+#         output = th.add(output, mask)
+#
+#
+#         # logits1, logits2 = th.split(logits, [self.action_dim // 2, self.action_dim // 2], dim=1)
+#         # masks = th.split(mask, [self.action_dim // 2, self.action_dim // 2], dim=1)
+#         # #
+#         # # logits1 = logits1.mul(mask1)
+#         # # logits2 = logits2.mul(mask2)
+#         # #
+#         # logits1 = nn.Softmax(dim=1)(logits1)
+#         # logits2 = nn.Softmax(dim=1)(logits2)
+#         #
+#         # logits1 = logits1.mul(mask1)
+#         # logits2 = logits2.mul(mask2)
+#         #
+#         # output = th.cat((logits1, logits2), 1)
+#
+#         # print("latent\t", logits[:, :])
+#         # print("mask\t", mask[:, :])
+#         # print("output\t", output[:, :])
+#         return output
+class FakeNet(nn.Module):
     def __init__(self, latent_dim, action_dim):
-        super(CustomMaskedLinear, self).__init__()
-        assert latent_dim - action_dim == latent_num, "latent_dim:{} and action_dim:{} must diff latent_num".format(
-            latent_dim, action_dim)
+        super(FakeNet, self).__init__()
+
         self.latent_dim = latent_dim
         self.action_dim = action_dim
-        self.linear = nn.Linear(self.latent_dim - self.action_dim, self.action_dim)
+        self.linear = None
 
     def forward(self, x):
-        latent, mask = th.split(x, [self.latent_dim - self.action_dim, self.action_dim], dim=1)
-
-        output = self.linear(latent)
-        mask = th.add(mask, -1)
-        mask = mask.mul(10000)
-        output = th.add(output, mask)
-
-
-        # logits1, logits2 = th.split(logits, [self.action_dim // 2, self.action_dim // 2], dim=1)
-        # masks = th.split(mask, [self.action_dim // 2, self.action_dim // 2], dim=1)
-        # #
-        # # logits1 = logits1.mul(mask1)
-        # # logits2 = logits2.mul(mask2)
-        # #
-        # logits1 = nn.Softmax(dim=1)(logits1)
-        # logits2 = nn.Softmax(dim=1)(logits2)
-        #
-        # logits1 = logits1.mul(mask1)
-        # logits2 = logits2.mul(mask2)
-        #
-        # output = th.cat((logits1, logits2), 1)
-
-        # print("latent\t", logits[:, :])
-        # print("mask\t", mask[:, :])
-        # print("output\t", output[:, :])
-        return output
-
+        return x
 
 class CustomMultiCategoricalDistribution(MultiCategoricalDistribution):
     def __init__(self, action_dim: int):
@@ -248,19 +272,18 @@ class CustomMultiCategoricalDistribution(MultiCategoricalDistribution):
 
     def proba_distribution_net(self, latent_dim: int) -> nn.Module:
         """
-        Create the layer that represents the distribution:
-        it will be the logits (flattened) of the MultiCategorical distribution.
-        You can then get probabilities using a softmax on each sub-space.
-        :param latent_dim: Dimension of the last layer
-            of the policy network (before the action layer)
-        :return:
+        directly return the output of policy network, which is masked action logits
         """
-        action_logits = CustomMaskedLinear(latent_dim, sum(self.action_dims))
+        action_logits = FakeNet(latent_dim, self.action_dim)
         return action_logits
 
     def proba_distribution(self, action_logits: th.Tensor) -> "MultiCategoricalDistribution":
+
+        action_dim_num = action_logits.shape[-1] // 2
+        action_dim = [action_dim_num, action_dim_num]
+
         self.distribution = [Categorical(logits=split) for split in
-                             th.split(action_logits, tuple(self.action_dims), dim=1)]
+                             th.split(action_logits, tuple(action_dim), dim=1)]
 
         # print("action logit:\t", action_logits)
         # for split in th.split(action_logits, tuple(self.action_dims), dim=1):
@@ -272,54 +295,54 @@ class CustomMultiCategoricalDistribution(MultiCategoricalDistribution):
 
 
 
-
-
-
-class CustomMaskedLinearBox(nn.Module):
-    def __init__(self, latent_dim, action_dim):
-        super(CustomMaskedLinearBox, self).__init__()
-        assert latent_dim - action_dim == latent_num, "latent_dim:{} and action_dim:{} must diff latent_num".format(
-            latent_dim, action_dim)
-        self.latent_dim = latent_dim
-        self.action_dim = action_dim
-        self.linear = nn.Linear(self.latent_dim - self.action_dim, self.action_dim)
-
-    def forward(self, x):
-        latent, mask = th.split(x, [self.latent_dim - self.action_dim, self.action_dim], dim=1)
-
-        output = self.linear(latent)
-        mask = th.add(mask, -1)
-        mask = mask.mul(10000)
-        logits = th.add(output, mask)
-
-        logits1, logits2 = th.split(logits, [self.action_dim // 2, self.action_dim // 2], dim=1)
-        logits1 = nn.Softmax(dim=1)(logits1)
-        logits2 = nn.Softmax(dim=1)(logits2)
-
-        output = th.cat((logits1, logits2), 1)
-        return output
-
-class CustomDiagGaussianDistribution(DiagGaussianDistribution):
-    def __init__(self, action_dim: int):
-        super(CustomDiagGaussianDistribution, self).__init__(action_dim)
-
-        self.action_dim = action_dim
-        self.mean_actions = None
-        self.log_std = None
-
-    def proba_distribution_net(self, latent_dim: int, log_std_init: float = 0.0) -> Tuple[nn.Module, nn.Parameter]:
-        """
-        Create the layers and parameter that represent the distribution:
-        one output will be the mean of the Gaussian, the other parameter will be the
-        standard deviation (log std in fact to allow negative values)
-        :param latent_dim: Dimension of the last layer of the policy (before the action layer)
-        :param log_std_init: Initial value for the log standard deviation
-        :return:
-        """
-        mean_actions = CustomMaskedLinearBox(latent_dim, self.action_dim)
-        # TODO: allow action dependent std
-        log_std = nn.Parameter(th.ones(self.action_dim) * log_std_init, requires_grad=True)
-        return mean_actions, log_std
+### box output
+#
+# #
+# class CustomMaskedLinearBox(nn.Module):
+#     def __init__(self, latent_dim, action_dim):
+#         super(CustomMaskedLinearBox, self).__init__()
+#         assert latent_dim - action_dim == latent_num, "latent_dim:{} and action_dim:{} must diff latent_num".format(
+#             latent_dim, action_dim)
+#         self.latent_dim = latent_dim
+#         self.action_dim = action_dim
+#         self.linear = nn.Linear(self.latent_dim - self.action_dim, self.action_dim)
+#
+#     def forward(self, x):
+#         latent, mask = th.split(x, [self.latent_dim - self.action_dim, self.action_dim], dim=1)
+#
+#         output = self.linear(latent)
+#         mask = th.add(mask, -1)
+#         mask = mask.mul(10000)
+#         logits = th.add(output, mask)
+#
+#         logits1, logits2 = th.split(logits, [self.action_dim // 2, self.action_dim // 2], dim=1)
+#         logits1 = nn.Softmax(dim=1)(logits1)
+#         logits2 = nn.Softmax(dim=1)(logits2)
+#
+#         output = th.cat((logits1, logits2), 1)
+#         return output
+#
+# class CustomDiagGaussianDistribution(DiagGaussianDistribution):
+#     def __init__(self, action_dim: int):
+#         super(CustomDiagGaussianDistribution, self).__init__(action_dim)
+#
+#         self.action_dim = action_dim
+#         self.mean_actions = None
+#         self.log_std = None
+#
+#     def proba_distribution_net(self, latent_dim: int, log_std_init: float = 0.0) -> Tuple[nn.Module, nn.Parameter]:
+#         """
+#         Create the layers and parameter that represent the distribution:
+#         one output will be the mean of the Gaussian, the other parameter will be the
+#         standard deviation (log std in fact to allow negative values)
+#         :param latent_dim: Dimension of the last layer of the policy (before the action layer)
+#         :param log_std_init: Initial value for the log standard deviation
+#         :return:
+#         """
+#         mean_actions = latent_dim#CustomMaskedLinearBox(latent_dim, self.action_dim)
+#         # TODO: allow action dependent std
+#         log_std = nn.Parameter(th.ones(self.action_dim) * log_std_init, requires_grad=True)
+#         return mean_actions, log_std
 
 def make_custom_proba_distribution_multidiscrete(
         action_space: gym.spaces.Space, use_sde: bool = False, dist_kwargs: Optional[Dict[str, Any]] = None

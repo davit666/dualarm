@@ -10,7 +10,7 @@ class TaskConfig:
     use_custom_network = True
 
     model_date = env_name + "/monitoring/" + time.strftime("%m%d")
-    custom_network_type = "custom_01"
+    custom_network_type = "custom_flatten_node"
     model_name = "test"
 
     alg_name = "PPO"
@@ -61,7 +61,7 @@ class TaskConfig:
     batch_size = 2048
     n_epochs = 10
 
-    total_timesteps = 1e8
+    total_timesteps = 1e7
 
 def load_config():
     ######## train config ########

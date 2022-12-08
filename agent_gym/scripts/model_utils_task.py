@@ -21,8 +21,9 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
             **kwargs,
     ):
 
-        # self.mask_dim = get_action_dim(action_space)
-        print("@@@@@@@@@@@@@@@@@@@@@@@@@", self.mask_dim)
+        self.mask_dim = 0
+        self.node_features_dim = 0
+
         super(CustomActorCriticPolicy, self).__init__(
             observation_space,
             action_space,
@@ -36,8 +37,10 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
 
         # Feature extractor
         self.features_extractor = CustomFeatureExtractor(self.observation_space, **self.features_extractor_kwargs)
-        self.node_feature_dim = self.features_extractor._features_dim
+        self.node_features_dim = self.features_extractor._features_dim
         self.mask_dim = self.features_extractor.mask_dim
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!11")
+        print(self.node_features_dim, self.mask_dim)
 
 
         # Action distribution
@@ -45,7 +48,7 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
         self._build(lr_schedule)
 
     def _build_mlp_extractor(self) -> None:
-        self.mlp_extractor = CustomNetwork_FlattenNodes(self.node_feature_dim, self.mask_dim)
+        self.mlp_extractor = CustomNetwork_FlattenNodes(self.node_features_dim, self.mask_dim)
 
 
 
@@ -156,7 +159,7 @@ class CustomNetwork_FlattenNodes(nn.Module):
         # Value network
         self.value_net = nn.Sequential(
             nn.Linear(flatten_node_dim, latent_dim), nn.ReLU(),
-            nn.Linear(latent_dim, latent_dim), nn.ReLU(),
+            nn.Linear(latent_dim, self.latent_dim_vf), nn.ReLU(),
         )
     def flatten(self,  features: th.Tensor) -> th.Tensor:
         f_r1 = th.flatten(features["robot_1_node"],1,2)

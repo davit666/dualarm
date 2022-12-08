@@ -473,7 +473,7 @@ class Env_tasks(gym.GoalEnv):
         # get new observation without cost_updated
         observation = self._observation()
         # get reward
-        reward = self._reward(cost)
+        reward = self._reward(cost, check)
         reward *= self.reward_scale
         self.accumulated_reward += reward
         # check termination
@@ -558,10 +558,15 @@ class Env_tasks(gym.GoalEnv):
 
         return cost, check
 
-    def _reward(self, cost):
+    def _reward(self, cost, check):
         reward = - cost / self.max_cost_const
-        if all([part.is_success for part in self.parts]) and all([robot.is_done for robot in self.robots]):
-            reward += self.global_success_bonus
+        # reward += check * 1
+        if all([robot.is_done for robot in self.robots]):
+            if all([part.is_success for part in self.parts]):
+                reward += self.global_success_bonus
+            else:
+                # reward -= self.global_success_bonus
+                reward -= sum([not part.is_success for part in self.parts])
         return reward
 
     def _termination(self):

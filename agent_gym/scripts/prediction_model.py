@@ -149,7 +149,6 @@ class Prediction_Model():
 
     def predict_mask(self, x):
         dim = len(x.shape)
-        print(dim)
         # x = x.to(self.device)
         pred_mask = self.mask_prediction_model.forward(x).argmax(dim = dim - 1)
         return pred_mask

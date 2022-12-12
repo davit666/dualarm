@@ -30,7 +30,12 @@ from torch import nn
 from prediction_model import Prediction_Model, get_features, NeuralNetwork
 from custom_subproc_vec_env import CustomSubprocVecEnv
 
-from model_utils_task import CustomFeatureExtractor, CustomNetwork_FlattenNodes, make_custom_proba_distribution_multidiscrete
+from model_utils_task import (
+    CustomFeatureExtractor,
+    CustomNetwork_FlattenNodes,
+    CustomNetwork_FlattenNodesAndEdges,
+    make_custom_proba_distribution_multidiscrete,
+)
 
 
 def make_env(task_config):
@@ -55,8 +60,7 @@ if __name__ == "__main__":
 
     print("!!!!!!!!!!!!!!!!!!!!!!!!!1")
     #### load prediction model
-    prediction_model = Prediction_Model(obs_type=obs_type, cost_type=cost_type, cost_model_path=cost_model_path,
-                                        mask_model_path=mask_model_path)
+    prediction_model = Prediction_Model(obs_type=obs_type, cost_type=cost_type, cost_model_path=cost_model_path, mask_model_path=mask_model_path)
     # input_features, cost_features, mask_features = prediction_model.get_input_and_output()
     #
     # input_shape = len(input_features)
@@ -65,79 +69,88 @@ if __name__ == "__main__":
 
     ######################## test a full episode with prediction
     task_config = load_config()
-    num_cpu = 20
+    num_cpu = 1
 
     env = CustomSubprocVecEnv([make_env(task_config) for i in range(num_cpu)])
     env.load_prediction_model(prediction_model, input_type=obs_type, output_type=cost_type)
 
     obs = env.reset()
-    # z_o = []
-    # z_a = []
-    # z_r = []
-    # z_d = []
-    # z_i = []
-    # for i in range(20):
-    #     acts = env.sample_action()
-    #     obs, rews, dones, infos = env.step(acts)
-    #     z_o.append(obs)
-    #     z_a.append(acts)
-    #     z_r.append(rews)
-    #     z_d.append(dones)
-    #     z_i.append(infos)
-    #     # print(i,acts)
-    #     if dones[0]:
-    #         break
+    z_o = []
+    z_a = []
+    z_r = []
+    z_d = []
+    z_i = []
+    for i in range(100):
+        acts = env.sample_action()
+        obs, rews, dones, infos = env.step(acts)
+        z_o.append(obs)
+        z_a.append(acts)
+        z_r.append(rews)
+        z_d.append(dones)
+        z_i.append(infos)
+        # print(i,acts)
+        if dones[0]:
+            break
 
     ################ test feature extractor
-    from stable_baselines3.common.utils import get_device, is_vectorized_observation, obs_as_tensor
+    # from stable_baselines3.common.utils import get_device, is_vectorized_observation, obs_as_tensor
 
-    # feature extractor
-    obs_space = env.observation_space
-    feature_extractor = CustomFeatureExtractor(obs_space)
-    print("feature extractor:\n", feature_extractor.extractors)
+    # # feature extractor
+    # obs_space = env.observation_space
+    # feature_extractor = CustomFeatureExtractor(obs_space)
+    # print("feature extractor:\n", feature_extractor.extractors)
 
-    # custom net flatten nodes
-    node_feature_dim = feature_extractor._features_dim
-    mask_dim = feature_extractor.mask_dim
-    net_fn = CustomNetwork_FlattenNodes(node_feature_dim, mask_dim)
-    print("flatten network:\n", net_fn)
+    # # custom net flatten nodes
+    # from model_utils_task import (
+    #     CustomNetwork_FlattenNodesAndEdges,
+    # )
 
-    # distribution
-    action_space = env.action_space
-    action_dist = make_custom_proba_distribution_multidiscrete(action_space)
+    # node_feature_dim = feature_extractor._features_dim
+    # mask_dim = feature_extractor.mask_dim
+    # # net_fn = CustomNetwork_FlattenNodes(node_feature_dim, mask_dim)
+    # net_fn = CustomNetwork_FlattenNodesAndEdges(node_feature_dim, mask_dim)
+    # print("flatten network:\n", net_fn)
 
-    obs = env.reset()
-    observation = {}
-    for key, _ in obs.items():
-        # print(obs[key])
-        obs_ = np.array(obs[key])
-        obs_ = obs_.reshape((-1,) + obs_space[key].shape)
-        observation[key] = torch.as_tensor(obs_).to("cpu")
+    # # distribution
+    # action_space = env.action_space
+    # action_dist = make_custom_proba_distribution_multidiscrete(action_space)
 
-    # observation = obs_as_tensor(observation,'cpu')
+    # obs = env.reset()
+    # observation = {}
+    # for key, _ in obs.items():
+    #     # print(obs[key])
+    #     obs_ = np.array(obs[key])
+    #     obs_ = obs_.reshape((-1,) + obs_space[key].shape)
+    #     observation[key] = torch.as_tensor(obs_).to("cpu")
 
-    encoded_obs = feature_extractor.forward(observation)
-    pi_logits, vf_logits = net_fn.forward(encoded_obs)
+    # # observation = obs_as_tensor(observation,'cpu')
 
-    results = {}
-    for key, _ in encoded_obs.items():
-        results[key] = encoded_obs[key].cpu().detach().numpy()
+    # encoded_obs = feature_extractor.forward(observation)
 
-    distribution = action_dist.proba_distribution(action_logits=pi_logits)
-    actions = distribution.get_actions(deterministic=True)
+    # for k, v in encoded_obs.items():
+    #     print(k)
+    #     print(v.detach().numpy().shape)
 
-    actions = actions.cpu().detach().numpy()
-    pi_logits, vf_logits = pi_logits.cpu().detach().numpy(), vf_logits.cpu().detach().numpy()
+    # pi_logits, vf_logits = net_fn.forward(encoded_obs)
 
-    obs2, rews, dones, infos = env.step(actions)
+    # results = {}
+    # for key, _ in encoded_obs.items():
+    #     results[key] = encoded_obs[key].cpu().detach().numpy()
 
+    # distribution = action_dist.proba_distribution(action_logits=pi_logits)
+    # actions = distribution.get_actions(deterministic=True)
 
-    ################# test action sample
+    # actions = actions.cpu().detach().numpy()
+    # pi_logits, vf_logits = pi_logits.cpu().detach().numpy(), vf_logits.cpu().detach().numpy()
 
-    # env0 = Env_tasks(task_config)
+    # obs2, rews, dones, infos = env.step(actions)
 
-    # act1 = env0.action_space.sample()
-    # act2 = env.sample_action()
+    # ################# test action sample
+
+    # # env0 = Env_tasks(task_config)
+
+    # # act1 = env0.action_space.sample()
+    # # act2 = env.sample_action()
 
     #################
 

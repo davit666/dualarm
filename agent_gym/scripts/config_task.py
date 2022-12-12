@@ -4,14 +4,15 @@ class TaskConfig:
     env_name = "pseudo_task"
 
     load_model = False
-    load_model_path = 'test_models/' + env_name + ''
-
+    load_model_path = 'test_models/' + env_name
+    load_model_path  += '/1212/test1_not_terminate_when_robot_done_with_check_custom_flatten_node/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_MultiDiscrete_2022-12-12-09-13-20/'
+    load_model_path += "test1_not_terminate_when_robot_done_with_check_at_the_end"
     ######## model ########
     use_custom_network = True
 
     model_date = env_name + "/monitoring/" + time.strftime("%m%d")
-    custom_network_type = "custom_flatten_node"
-    model_name = "test"
+    custom_network_type = "custom_flatten_all"#"custom_flatten_node"#
+    model_name = "real_test/part_done_terminate_10M"
 
     alg_name = "PPO"
     task_allocator_reward_type = "negative_normalized_cost_with_sparse_success_bonus"
@@ -28,6 +29,8 @@ class TaskConfig:
 
     ######## env config ########
     part_num = 6
+    robot_done_freeze = True
+
     task_type = "random"
     dynamic_task = False
 
@@ -104,6 +107,7 @@ def load_config():
     task_config['mask_model_path'] = T.mask_model_path
     ######## env config ########
     task_config['part_num'] = T.part_num
+    task_config['robot_done_freeze'] = T.robot_done_freeze
     task_config['task_type'] = T.task_type
     task_config['dynamic_task'] = T.dynamic_task
     task_config['max_cost_const'] = T.max_cost_const

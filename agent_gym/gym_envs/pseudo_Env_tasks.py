@@ -39,7 +39,7 @@ class Env_tasks(gym.GoalEnv):
                  # motion_planner_obs_type="common_obs",
                  # motion_planner_action_type="ee",
                  parts_num=6,
-                 maxSteps=30):
+                 maxSteps=50):
 
         self._urdfRoot = urdfRoot
         self._useInverseKinematics = useInverseKinematics
@@ -78,6 +78,8 @@ class Env_tasks(gym.GoalEnv):
 
         self.task_type = env_config['task_type']
         self.dynamic_task = env_config['dynamic_task']
+
+        self.robot_done_freeze = env_config['robot_done_freeze']
 
         ######### define gym conditions
 
@@ -306,9 +308,10 @@ class Env_tasks(gym.GoalEnv):
                 obs2 = np.concatenate([init_ee2, goal_ee2, [dist_xyz2], [dist_rz2]])
                 # others
                 node_type = np.array([0, 1])
-                node_mask = robots_mask[i] * parts_mask[j]
+                # node_mask = robots_mask[i] * parts_mask[j]
+                node_mask = parts_mask[j]
 
-                node_obs = np.concatenate([obs1, obs2, node_type, [node_mask]])
+                node_obs = np.concatenate([obs1, obs2, node_type, [node_mask],[robots_mask[i]]])
                 self.state_info["robot_{}_node_obs_{}".format(i + 1, j + 1)] = node_obs
                 self.state_info["robot_{}_node_obs1_{}".format(i + 1, j + 1)] = obs1
                 self.state_info["robot_{}_node_obs2_{}".format(i + 1, j + 1)] = obs2
@@ -333,7 +336,7 @@ class Env_tasks(gym.GoalEnv):
             node_type = np.array([1, 0])
             node_mask = 1
 
-            reset_node_obs = np.concatenate([obs1, obs2, node_type, [node_mask]])
+            reset_node_obs = np.concatenate([obs1, obs2, node_type, [node_mask],[robots_mask[i]]])
             self.state_info["robot_{}_reset_node_obs".format(i + 1)] = reset_node_obs
             self.state_info["robot_{}_node_obs1_{}".format(i + 1, self.parts_num + 1)] = obs1
             self.state_info["robot_{}_node_obs2_{}".format(i + 1, self.parts_num + 1)] = obs2
@@ -368,7 +371,8 @@ class Env_tasks(gym.GoalEnv):
 
             task_edge_mask = np.array([1] * (self.parts_num + 1))
             for n in range(self.parts_num):
-                task_edge_mask[n] = robots_mask[i] * parts_mask[n]
+                # task_edge_mask[n] = robots_mask[i] * parts_mask[n]
+                task_edge_mask[n] =  parts_mask[n]
 
             self.state_info["robot_{}_task_edge_xyz".format(i + 1)] = task_edge_xyz
             self.state_info["robot_{}_task_edge_rz".format(i + 1)] = task_edge_rz
@@ -484,13 +488,17 @@ class Env_tasks(gym.GoalEnv):
             episode_info['2_cost/accumulated_cost'] = self.accumulated_cost
             episode_info['2_cost/average_cost'] = self.accumulated_cost / self.env_step_counter
             episode_info['3_reward/accumulated_reward'] = self.accumulated_reward
-            episode_info['3_reward/average_reward'] = self.accumulated_reward
+            episode_info['3_reward/average_reward'] = self.accumulated_reward / self.env_step_counter
             episode_info['4_succ_task_num/task_num'] = self.succ_parts_num
             for i, robot in enumerate(self.robots):
                 episode_info['5_robot_info/robot{}_task'.format(i + 1)] = robot.tasks_done
                 episode_info['5_robot_info/robot{}_freeze_step'.format(i + 1)] = robot.freeze_step
                 episode_info['5_robot_info/robot{}_wrong_allocation'.format(i + 1)] = robot.wrong_allocation
             episode_info['6_global_success'] = self.success
+
+            # print(episode_info['4_succ_task_num/task_num'])
+            # print(allocator_action)
+            # print(self.accumulated_reward)
         else:
             episode_info = {}
             episode_info['7_status/correct_check'] = check
@@ -509,7 +517,7 @@ class Env_tasks(gym.GoalEnv):
 
     def apply_action(self, allocator_action):
         cost = 0
-        check = None
+        check = 0
         assert self.prediction_updated
         if self._renders:
             print("allocator action:\t",allocator_action)
@@ -518,6 +526,10 @@ class Env_tasks(gym.GoalEnv):
 
         if any(self.state_info['robots_task_edge_mask'][i][allocator_action[i]] == 0 for i in range(self.robots_num)):
             coop_mask = 0
+        elif self.robot_done_freeze:
+            for i, robot in enumerate(self.robots):
+                if robot.is_done and allocator_action[i] != self.parts_num:
+                    coop_mask = 0
 
         if coop_mask == 0:
             check = 0
@@ -528,28 +540,44 @@ class Env_tasks(gym.GoalEnv):
                 robot.wrong_allocation += 1
             cost = self.max_cost_const
         else:
-            check = 1
             if self._renders:
                 print("correct action")
             # assign robot goal and execute action
             for i, robot in enumerate(self.robots):
-                # doned robot wont move
-                if robot.is_done:
-                    continue
-                # other robots move
                 robot_action = allocator_action[i]
-                # print("act{}:".format(i),robot_action)
-                if robot_action < self.parts_num:
-                    # finish a part task
-                    part = self.parts[robot_action]
-                    robot_target = part.getGoalPose()
-                    robot.applyAction(robot_target)
-                    part.pickedAndPlaced()
-                    robot.tasks_done += 1
+
+                if robot.is_done:
+                    # done robot wont move
+                    if self.robot_done_freeze:
+                        assert robot_action == self.parts_num
+                        break
+                    # done robot could move
+                    else:
+                        if robot_action < self.parts_num:
+                            check += 1
+                            # restart and finish a part task
+                            part = self.parts[robot_action]
+                            robot_target = part.getGoalPose()
+                            robot.applyAction(robot_target)
+                            part.pickedAndPlaced()
+                            robot.tasks_done += 1
+                            robot.is_done = False
+                            robot.freeze_step = 0
                 else:
-                    robot.applyAction(robot.goal_pose)
-                    robot.is_done = True
-                    robot.freeze_step = self.env_step_counter
+                    # not done robots move
+                    # print("act{}:".format(i),robot_action)
+                    if robot_action < self.parts_num:
+                        check += 1
+                        # finish a part task
+                        part = self.parts[robot_action]
+                        robot_target = part.getGoalPose()
+                        robot.applyAction(robot_target)
+                        part.pickedAndPlaced()
+                        robot.tasks_done += 1
+                    else:
+                        robot.applyAction(robot.goal_pose)
+                        robot.is_done = True
+                        robot.freeze_step = self.env_step_counter
             # get cost
             cost = coop_cost
 
@@ -560,25 +588,39 @@ class Env_tasks(gym.GoalEnv):
 
     def _reward(self, cost, check):
         reward = - cost / self.max_cost_const
-        # reward += check * 1
+        reward += check * 1
         if all([robot.is_done for robot in self.robots]):
             if all([part.is_success for part in self.parts]):
                 reward += self.global_success_bonus
             else:
-                # reward -= self.global_success_bonus
-                reward -= sum([not part.is_success for part in self.parts])
+                if self.robot_done_freeze:
+                    # give punishment for task unfinished in success_freeze pattern
+                    reward -= self.global_success_bonus
+                else:
+                    reward = - self.max_cost_const / self.max_cost_const
+                # reward -= sum([not part.is_success for part in self.parts])
         return reward
 
     def _termination(self):
         if self.env_step_counter >= self._maxSteps:
             self.terminated = True
             self.failed = True
-        if all([robot.is_done for robot in self.robots]):
-            self.terminated = True
-            if self.succ_parts_num == self.parts_num:
+
+        if self.robot_done_freeze:
+            # terminated when robot done
+            if all([robot.is_done for robot in self.robots]):
+                self.terminated = True
+                if self.succ_parts_num == self.parts_num:
+                    self.success = True
+                else:
+                    self.failed = True
+
+        else:
+            # terminate when task and robot done
+            if all([robot.is_done for robot in self.robots]) and (self.succ_parts_num == self.parts_num):
+                self.terminated = True
                 self.success = True
-            else:
-                self.failed = True
+
         return self.terminated
 
     def sample_action(self):

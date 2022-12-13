@@ -75,82 +75,90 @@ if __name__ == "__main__":
     env.load_prediction_model(prediction_model, input_type=obs_type, output_type=cost_type)
 
     obs = env.reset()
-    z_o = []
-    z_a = []
-    z_r = []
-    z_d = []
-    z_i = []
-    for i in range(100):
-        acts = env.sample_action()
-        obs, rews, dones, infos = env.step(acts)
-        z_o.append(obs)
-        z_a.append(acts)
-        z_r.append(rews)
-        z_d.append(dones)
-        z_i.append(infos)
-        # print(i,acts)
-        if dones[0]:
-            break
+    # z_o = []
+    # z_a = []
+    # z_r = []
+    # z_d = []
+    # z_i = []
+    # for i in range(100):
+    #     acts = env.sample_action()
+    #     obs, rews, dones, infos = env.step(acts)
+    #     z_o.append(obs)
+    #     z_a.append(acts)
+    #     z_r.append(rews)
+    #     z_d.append(dones)
+    #     z_i.append(infos)
+    #     # print(i,acts)
+    #     if dones[0]:
+    #         break
 
     ################ test feature extractor
-    # from stable_baselines3.common.utils import get_device, is_vectorized_observation, obs_as_tensor
+    from stable_baselines3.common.utils import get_device, is_vectorized_observation, obs_as_tensor
 
-    # # feature extractor
-    # obs_space = env.observation_space
-    # feature_extractor = CustomFeatureExtractor(obs_space)
-    # print("feature extractor:\n", feature_extractor.extractors)
+    # feature extractor
+    obs_space = env.observation_space
+    feature_extractor = CustomFeatureExtractor(obs_space)
+    print("feature extractor:\n", feature_extractor.extractors)
 
-    # # custom net flatten nodes
-    # from model_utils_task import (
-    #     CustomNetwork_FlattenNodesAndEdges,
-    # )
+    # custom net flatten nodes
+    from model_utils_task import (
+        CustomNetwork_FlattenNodesAndEdges,
+        CustomNetwork_SelfAttention,
+        CustomNetwork_SelfCrossAttention,
+        CustomNetwork_SelfAttentionWithTaskEdge,
+        CustomNetwork_SelfCrossAttentionWithEdge,
+    )
 
-    # node_feature_dim = feature_extractor._features_dim
-    # mask_dim = feature_extractor.mask_dim
-    # # net_fn = CustomNetwork_FlattenNodes(node_feature_dim, mask_dim)
+    node_feature_dim = feature_extractor._features_dim
+    mask_dim = feature_extractor.mask_dim
+    # net_fn = CustomNetwork_FlattenNodes(node_feature_dim, mask_dim)
     # net_fn = CustomNetwork_FlattenNodesAndEdges(node_feature_dim, mask_dim)
-    # print("flatten network:\n", net_fn)
+    # net_fn = CustomNetwork_SelfAttention(node_feature_dim, mask_dim)
+    # net_fn = CustomNetwork_SelfCrossAttention(node_feature_dim, mask_dim)
+    # net_fn = CustomNetwork_SelfAttentionWithTaskEdge(node_feature_dim, mask_dim)
+    net_fn = CustomNetwork_SelfCrossAttentionWithEdge(node_feature_dim, mask_dim)
+    print("flatten network:\n", net_fn)
 
-    # # distribution
-    # action_space = env.action_space
-    # action_dist = make_custom_proba_distribution_multidiscrete(action_space)
+    # distribution
+    action_space = env.action_space
+    action_dist = make_custom_proba_distribution_multidiscrete(action_space)
 
-    # obs = env.reset()
-    # observation = {}
-    # for key, _ in obs.items():
-    #     # print(obs[key])
-    #     obs_ = np.array(obs[key])
-    #     obs_ = obs_.reshape((-1,) + obs_space[key].shape)
-    #     observation[key] = torch.as_tensor(obs_).to("cpu")
+    obs = env.reset()
+    observation = {}
+    for key, _ in obs.items():
+        # print(obs[key])
+        obs_ = np.array(obs[key])
+        obs_ = obs_.reshape((-1,) + obs_space[key].shape)
+        observation[key] = torch.as_tensor(obs_).to("cpu")
 
-    # # observation = obs_as_tensor(observation,'cpu')
+    # observation = obs_as_tensor(observation,'cpu')
 
-    # encoded_obs = feature_extractor.forward(observation)
+    encoded_obs = feature_extractor.forward(observation)
 
-    # for k, v in encoded_obs.items():
-    #     print(k)
-    #     print(v.detach().numpy().shape)
+    for k, v in encoded_obs.items():
+        print(k)
+        print(v.detach().numpy().shape)
 
-    # pi_logits, vf_logits = net_fn.forward(encoded_obs)
+    pi_logits, vf_logits = net_fn.forward(encoded_obs)
 
-    # results = {}
-    # for key, _ in encoded_obs.items():
-    #     results[key] = encoded_obs[key].cpu().detach().numpy()
+    results = {}
+    for key, _ in encoded_obs.items():
+        results[key] = encoded_obs[key].cpu().detach().numpy()
 
-    # distribution = action_dist.proba_distribution(action_logits=pi_logits)
-    # actions = distribution.get_actions(deterministic=True)
+    distribution = action_dist.proba_distribution(action_logits=pi_logits)
+    actions = distribution.get_actions(deterministic=False)
 
-    # actions = actions.cpu().detach().numpy()
-    # pi_logits, vf_logits = pi_logits.cpu().detach().numpy(), vf_logits.cpu().detach().numpy()
+    actions = actions.cpu().detach().numpy()
+    pi_logits, vf_logits = pi_logits.cpu().detach().numpy(), vf_logits.cpu().detach().numpy()
 
-    # obs2, rews, dones, infos = env.step(actions)
+    obs2, rews, dones, infos = env.step(actions)
 
-    # ################# test action sample
+    ################# test action sample
 
-    # # env0 = Env_tasks(task_config)
+    # env0 = Env_tasks(task_config)
 
-    # # act1 = env0.action_space.sample()
-    # # act2 = env.sample_action()
+    # act1 = env0.action_space.sample()
+    # act2 = env.sample_action()
 
     #################
 

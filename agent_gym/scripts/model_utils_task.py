@@ -47,7 +47,10 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
 
     def _build_mlp_extractor(self) -> None:
         # self.mlp_extractor = CustomNetwork_FlattenNodes(self.node_features_dim, self.mask_dim)
-        self.mlp_extractor = CustomNetwork_FlattenNodesAndEdges(self.node_features_dim, self.mask_dim)
+        # self.mlp_extractor = CustomNetwork_FlattenNodesAndEdges(self.node_features_dim, self.mask_dim)
+        # self.mlp_extractor = CustomNetwork_SelfAttention(self.node_features_dim, self.mask_dim)
+        # self.mlp_extractor = CustomNetwork_SelfCrossAttention(self.node_features_dim, self.mask_dim)
+        self.mlp_extractor = CustomNetwork_SelfAttentionWithTaskEdge(self.node_features_dim, self.mask_dim)
 
 
 ####################################3 custom actor critic network
@@ -215,6 +218,10 @@ class CustomNetwork_FlattenNodesAndEdges(nn.Module):
 
 
 ##### attention nodes
+
+from multi_head_attention import ScaledDotProductAttention, MultiHeadAttention
+
+
 class CustomNetwork_SelfAttention(nn.Module):
     """
     this network use self attention to decode node and task edge features
@@ -239,33 +246,330 @@ class CustomNetwork_SelfAttention(nn.Module):
         # Save output dimensions, used to create the distributions
         self.latent_dim_pi = self.mask_dim * 2
         self.latent_dim_vf = 64
+        self.head_num = 8
+
+        # node decoder
+        self.robot1_decoder1 = MultiHeadAttention(feature_dim, self.head_num, feature_dim)
+        self.robot1_decoder2 = MultiHeadAttention(feature_dim, self.head_num, 16)
+
+        self.robot2_decoder1 = MultiHeadAttention(feature_dim, self.head_num, feature_dim)
+        self.robot2_decoder2 = MultiHeadAttention(feature_dim, self.head_num, 16)
 
         # Policy network
-        self.policy_net = nn.Sequential(
+        self.policy_net_r1 = nn.Sequential(
+            nn.Linear(16, 1)
+        )
+        self.policy_net_r2 = nn.Sequential(
+            nn.Linear(16, 1)
         )
         # Value network
         self.value_net = nn.Sequential(
+            nn.Linear(16 * 2 * mask_dim, self.latent_dim_vf)
         )
 
     def mask_action(self, features, action):
         assert action.shape[1] == self.mask_dim * 2
-
+        # print("!!!!!!!!!!!!!!!!!!!!1")
+        # print(action.detach().numpy())
         mask = th.cat([features["robot_1_task_edge_mask"], features["robot_2_task_edge_mask"]], dim=1)
-        mask = th.add(mask, -1)
-        mask = mask.mul(10000)
-
-        masked_action = th.add(action, mask)
-
+        masked_action = action.masked_fill(mask == 0, -1e9)
         return masked_action
 
+    def decode_feature(self, features):
+        f_r1 = features["robot_1_node"]
+        f_r2 = features["robot_2_node"]
+
+        # print("111111111111111111111111")
+        # print(f_r1[:,:,:5].detach().numpy())
+
+        mask1 = th.unsqueeze(features["robot_1_task_edge_mask"], 1)
+        mask2 = th.unsqueeze(features["robot_2_task_edge_mask"], 1)
+
+        f_r1 = self.robot1_decoder1(f_r1, f_r1, f_r1, mask=mask1)
+
+        # print("?????????????????????????????")
+        # print(mask1)
+        # print(f_r1[:, :, :5].detach().numpy())
+
+        f_r1 = self.robot1_decoder2(f_r1, f_r1, f_r1, mask=mask1)
+
+        # print("2222222222222222222222222222")
+        # print(f_r1[:,:,:5].detach().numpy())
+
+        f_r2 = self.robot2_decoder1(f_r2, f_r2, f_r2, mask=mask2)
+        f_r2 = self.robot2_decoder2(f_r2, f_r2, f_r2, mask=mask2)
+
+        # print("3333333333333333333333333333333")
+        # print(f_r1[:, :, :5].detach().numpy())
+
+        return f_r1, f_r2
+
     def forward(self, features: th.Tensor) -> th.Tensor:
-        return
+        f_r1, f_r2 = self.decode_feature(features)
+
+        act_r1 = self.policy_net_r1(f_r1)
+        act_r2 = self.policy_net_r2(f_r1)
+
+        # print("@@@@@@@@@@@@@@@@@@@@@@")
+        # print(f_r1.detach().numpy())
+
+        action = th.cat([th.flatten(act_r1, 1, 2), th.flatten(act_r2, 1, 2)], dim=1)
+        masked_action = self.mask_action(features, action)
+
+        f_value = th.cat([th.flatten(f_r1, 1, 2), th.flatten(f_r2, 1, 2)], dim=1)
+
+        return masked_action, self.value_net(f_value)
 
     def forward_actor(self, features: th.Tensor) -> th.Tensor:
-        return
+        f_r1, f_r2 = self.decode_feature(features)
+
+        act_r1 = self.policy_net_r1(f_r1)
+        act_r2 = self.policy_net_r2(f_r1)
+
+        action = th.cat([th.flatten(act_r1, 1, 2), th.flatten(act_r2, 1, 2)], dim=1)
+        masked_action = self.mask_action(features, action)
+        return masked_action
 
     def forward_critic(self, features: th.Tensor) -> th.Tensor:
-        return
+        f_r1, f_r2 = self.decode_feature(features)
+        f_value = th.cat([th.flatten(f_r1, 1, 2), th.flatten(f_r2, 1, 2)], dim=1)
+        return self.value_net(f_value)
+
+
+######## self + cross attention
+
+from multi_head_attention import MultiHeadSelfCrossAttention
+
+
+class CustomNetwork_SelfCrossAttention(CustomNetwork_SelfAttention):
+    """
+    this network use self attention to decode node and task edge features
+
+    :param feature_dim: dimension of the features extracted with the features_extractor (e.g. features from a CNN)
+    :param last_layer_dim_pi: (int) number of units for the last layer of the policy network
+    :param last_layer_dim_vf: (int) number of units for the last layer of the value network
+    """
+
+    def __init__(
+            self,
+            feature_dim: int,
+            mask_dim: int,
+            last_layer_dim_pi: int = latent_dim,
+            last_layer_dim_vf: int = latent_dim,
+    ):
+        super(CustomNetwork_SelfCrossAttention, self).__init__(
+            feature_dim=feature_dim,
+            mask_dim=mask_dim,
+            last_layer_dim_pi=latent_dim,
+            last_layer_dim_vf=latent_dim,
+        )
+
+        # IMPORTANT:
+        self.feature_dim = feature_dim
+        self.mask_dim = mask_dim
+        # Save output dimensions, used to create the distributions
+        self.latent_dim_pi = self.mask_dim * 2
+        self.latent_dim_vf = 64
+        self.head_num = 8 // 2
+
+        # node decoder
+        self.robot1_decoder1 = MultiHeadSelfCrossAttention(self.feature_dim, self.head_num, self.feature_dim)
+        self.robot1_decoder2 = MultiHeadSelfCrossAttention(self.feature_dim, self.head_num, 16)
+
+        self.robot2_decoder1 = MultiHeadSelfCrossAttention(self.feature_dim, self.head_num, self.feature_dim)
+        self.robot2_decoder2 = MultiHeadSelfCrossAttention(self.feature_dim, self.head_num, 16)
+
+        # Policy network
+        self.policy_net_r1 = nn.Sequential(
+            nn.Linear(16, 1)
+        )
+        self.policy_net_r2 = nn.Sequential(
+            nn.Linear(16, 1)
+        )
+        # Value network
+        self.value_net = nn.Sequential(
+            nn.Linear(16 * 2 * mask_dim, self.latent_dim_vf)
+        )
+
+    def decode_feature(self, features):
+        f_r1 = features["robot_1_node"]
+        f_r2 = features["robot_2_node"]
+
+        mask1 = th.unsqueeze(features["robot_1_task_edge_mask"], 1)
+        mask2 = th.unsqueeze(features["robot_2_task_edge_mask"], 1)
+
+        coop_mask = features["coop_edge_mask"]
+        # print(coop_mask.shape, "!!!!!!!!!!!", mask1.shape)
+
+        f_r1_1 = self.robot1_decoder1(f_r1, f_r2, masks=mask1, maskc=coop_mask)
+        f_r2_1 = self.robot2_decoder1(f_r2, f_r1, masks=mask2, maskc=coop_mask.transpose(-2, -1))
+        # print("!!!!!!!!!!!!!!!!!!!11111!!!")
+        # print(f_r1.shape, f_r2.shape)
+        f_r1_2 = self.robot1_decoder2(f_r1_1, f_r2_1, masks=mask1, maskc=coop_mask)
+        f_r2_2 = self.robot2_decoder2(f_r2_1, f_r1_1, masks=mask2, maskc=coop_mask.transpose(-2, -1))
+
+        # print("3333333333333333333333333333333")
+        # print(f_r1[:, :, :5].detach().numpy())
+
+        return f_r1_2, f_r2_2
+
+
+######## self attention with edge
+
+from multi_head_attention import MultiHeadAttentionWithEdge
+
+
+class CustomNetwork_SelfAttentionWithTaskEdge(CustomNetwork_SelfAttention):
+    """
+    this network use self attention to decode node and task edge features
+
+    :param feature_dim: dimension of the features extracted with the features_extractor (e.g. features from a CNN)
+    :param last_layer_dim_pi: (int) number of units for the last layer of the policy network
+    :param last_layer_dim_vf: (int) number of units for the last layer of the value network
+    """
+
+    def __init__(
+            self,
+            feature_dim: int,
+            mask_dim: int,
+            last_layer_dim_pi: int = latent_dim,
+            last_layer_dim_vf: int = latent_dim,
+    ):
+        super(CustomNetwork_SelfAttentionWithTaskEdge, self).__init__(
+            feature_dim=feature_dim,
+            mask_dim=mask_dim,
+            last_layer_dim_pi=latent_dim,
+            last_layer_dim_vf=latent_dim,
+        )
+
+        # IMPORTANT:
+        self.feature_dim = feature_dim
+        self.mask_dim = mask_dim
+        # Save output dimensions, used to create the distributions
+        self.latent_dim_pi = self.mask_dim * 2
+        self.latent_dim_vf = 64
+        self.head_num = 8
+
+        # node decoder
+        self.robot1_decoder1 = MultiHeadAttentionWithEdge(feature_dim, self.head_num, feature_dim)
+        self.robot1_decoder2 = MultiHeadAttentionWithEdge(feature_dim, self.head_num, 16)
+
+        self.robot2_decoder1 = MultiHeadAttentionWithEdge(feature_dim, self.head_num, feature_dim)
+        self.robot2_decoder2 = MultiHeadAttentionWithEdge(feature_dim, self.head_num, 16)
+
+        # Policy network
+        self.policy_net_r1 = nn.Sequential(
+            nn.Linear(16, 1)
+        )
+        self.policy_net_r2 = nn.Sequential(
+            nn.Linear(16, 1)
+        )
+        # Value network
+        self.value_net = nn.Sequential(
+            nn.Linear(16 * 2 * mask_dim, self.latent_dim_vf)
+        )
+
+    def decode_feature(self, features):
+        f_r1 = features["robot_1_node"]
+        f_r2 = features["robot_2_node"]
+
+        edge_r1 = features["robot_1_task_edge_dist"]
+        edge_r2 = features["robot_2_task_edge_dist"]
+
+        mask1 = th.unsqueeze(features["robot_1_task_edge_mask"], 1)
+        mask2 = th.unsqueeze(features["robot_2_task_edge_mask"], 1)
+
+        f_r1 = self.robot1_decoder1(f_r1, edge_r1, f_r1, mask=mask1)
+        # print("!!!!!!!!!!!!!!!!!!!!!!!!!")
+        f_r1 = self.robot1_decoder2(f_r1, edge_r1, f_r1, mask=mask1)
+
+        f_r2 = self.robot2_decoder1(f_r2, edge_r2, f_r2, mask=mask2)
+        f_r2 = self.robot2_decoder2(f_r2, edge_r2, f_r2, mask=mask2)
+
+        return f_r1, f_r2
+
+
+########### self and cross attention with edges
+
+from multi_head_attention import MultiHeadSelfCrossAttentionWithEdge
+
+
+class CustomNetwork_SelfCrossAttentionWithEdge(CustomNetwork_SelfAttention):
+    """
+    this network use self attention to decode node and task edge features
+
+    :param feature_dim: dimension of the features extracted with the features_extractor (e.g. features from a CNN)
+    :param last_layer_dim_pi: (int) number of units for the last layer of the policy network
+    :param last_layer_dim_vf: (int) number of units for the last layer of the value network
+    """
+
+    def __init__(
+            self,
+            feature_dim: int,
+            mask_dim: int,
+            last_layer_dim_pi: int = latent_dim,
+            last_layer_dim_vf: int = latent_dim,
+    ):
+        super(CustomNetwork_SelfCrossAttentionWithEdge, self).__init__(
+            feature_dim=feature_dim,
+            mask_dim=mask_dim,
+            last_layer_dim_pi=latent_dim,
+            last_layer_dim_vf=latent_dim,
+        )
+
+        # IMPORTANT:
+        self.feature_dim = feature_dim
+        self.mask_dim = mask_dim
+        # Save output dimensions, used to create the distributions
+        self.latent_dim_pi = self.mask_dim * 2
+        self.latent_dim_vf = 64
+        self.head_num = 8 // 2
+
+        # node decoder
+        self.robot1_decoder1 = MultiHeadSelfCrossAttentionWithEdge(self.feature_dim, self.head_num, self.feature_dim)
+        self.robot1_decoder2 = MultiHeadSelfCrossAttentionWithEdge(self.feature_dim, self.head_num, 16)
+
+        self.robot2_decoder1 = MultiHeadSelfCrossAttentionWithEdge(self.feature_dim, self.head_num, self.feature_dim)
+        self.robot2_decoder2 = MultiHeadSelfCrossAttentionWithEdge(self.feature_dim, self.head_num, 16)
+
+        # Policy network
+        self.policy_net_r1 = nn.Sequential(
+            nn.Linear(16, 1)
+        )
+        self.policy_net_r2 = nn.Sequential(
+            nn.Linear(16, 1)
+        )
+        # Value network
+        self.value_net = nn.Sequential(
+            nn.Linear(16 * 2 * mask_dim, self.latent_dim_vf)
+        )
+
+    def decode_feature(self, features):
+        f_r1 = features["robot_1_node"]
+        f_r2 = features["robot_2_node"]
+
+        edge_r1 = features["robot_1_task_edge_dist"]
+        edge_r2 = features["robot_2_task_edge_dist"]
+        edge_coop = features["coop_edge_cost"]
+
+        mask1 = th.unsqueeze(features["robot_1_task_edge_mask"], 1)
+        mask2 = th.unsqueeze(features["robot_2_task_edge_mask"], 1)
+
+        coop_mask = features["coop_edge_mask"]
+        # print(coop_mask.shape, "!!!!!!!!!!!", mask1.shape)
+
+        f_r1_1 = self.robot1_decoder1(f_r1, f_r2, edge_r1, edge_coop, masks=mask1, maskc=coop_mask)
+        f_r2_1 = self.robot2_decoder1(f_r2, f_r1, edge_r2, edge_coop, masks=mask2, maskc=coop_mask.transpose(-2, -1))
+        # print("!!!!!!!!!!!!!!!!!!!11111!!!")
+        # print(f_r1.shape, f_r2.shape)
+        f_r1_2 = self.robot1_decoder2(f_r1_1, f_r2_1, edge_r1, edge_coop, masks=mask1, maskc=coop_mask)
+        f_r2_2 = self.robot2_decoder2(f_r2_1, f_r1_1, edge_r2, edge_coop, masks=mask2,
+                                      maskc=coop_mask.transpose(-2, -1))
+
+        # print("3333333333333333333333333333333")
+        # print(f_r1[:, :, :5].detach().numpy())
+
+        return f_r1_2, f_r2_2
 
 
 #################################### custom feature extractor

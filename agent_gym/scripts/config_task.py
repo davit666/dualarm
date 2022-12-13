@@ -11,7 +11,7 @@ class TaskConfig:
     use_custom_network = True
 
     model_date = env_name + "/monitoring/" + time.strftime("%m%d")
-    custom_network_type = "custom_flatten_all"#"custom_flatten_node"#
+    custom_network_type = "custom_self_attention_edge"#"custom_flatten_all"#"custom_flatten_node"#
     model_name = "real_test/part_done_terminate_10M"
 
     alg_name = "PPO"
@@ -29,7 +29,7 @@ class TaskConfig:
 
     ######## env config ########
     part_num = 6
-    robot_done_freeze = True
+    robot_done_freeze = False
 
     task_type = "random"
     dynamic_task = False

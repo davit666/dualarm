@@ -63,7 +63,6 @@ if __name__ == "__main__":
     load_model_path = task_config["load_model_path"]
 
     ############ load prediction model
-
     cost_type = task_config["cost_type"]
     obs_type = task_config["obs_type"]
 
@@ -81,24 +80,111 @@ if __name__ == "__main__":
     env.load_prediction_model(prediction_model, input_type=obs_type, output_type=cost_type, use_prediction_model=use_prediction_model)
 
     ########### load trained policy
-    policy = PPO.load(load_model_path)
+    policy = None# PPO.load(load_model_path)
 
-    obs = env.reset()
-    z_o = []
-    z_a = []
-    z_r = []
-    z_d = []
-    z_i = []
-    for i in range(300):
-        acts = policy.predict(obs, deterministic=True)[0]
-        print("predicted act:")
-        print(acts)
-        obs, rews, dones, infos = env.step(acts)
-        z_o.append(obs)
-        z_a.append(acts)
-        z_r.append(rews)
-        z_d.append(dones)
-        z_i.append(infos)
-        # print(i,acts)
-        if dones[0]:
-            break
+    ################## evaluate many episodes and get average
+
+    use_baseline = "random_sample"
+
+
+
+    loop = 100
+    succ_num = 0
+    early_finish_num = 0
+    step_early_finish = []
+    step_succ = []
+    acc_cost = []
+    ave_cost = []
+    acc_r = []
+    ave_r = []
+    task_num = []
+    early_finish_task_num = []
+    robot1_task_num = []
+    robot2_task_num = []
+    wrong_allocation_rate = []
+    time0 = time.time()
+    for k in range(loop):
+        count_while = 0
+        obs = env.reset()
+        done = False
+        while not done:
+            count_while += 1
+            if use_baseline is None:
+                action = policy.predict(obs, deterministic=True)[0]
+            elif use_baseline == "random_sample":
+                action = env.sample_action()
+            obss, rewards, dones, infos = env.step(action)
+            obs = obss
+            reward = rewards[0]
+            done = dones[0]
+            info = infos[0]
+
+        acc_r.append(info['3_reward/accumulated_reward'])
+        ave_r.append(info['3_reward/average_reward'])
+        task_num.append(info['4_succ_task_num/task_num'])
+        robot1_task_num.append(info['5_robot_info/robot1_task'])
+        robot2_task_num.append(info['5_robot_info/robot2_task'])
+        wrong_allocation_rate.append(info['5_robot_info/robot1_wrong_allocation'] / info['1_num_steps'])
+        s = info['6_global_success']
+        if s :
+            succ_num += 1
+            step_succ.append(info['1_num_steps'])
+            acc_cost.append(info['2_cost/accumulated_cost'])
+            ave_cost.append(info['2_cost/average_cost'])
+        elif info['1_num_steps'] < 50:
+            early_finish_num += 1
+            step_early_finish.append(info['1_num_steps'])
+            early_finish_task_num.append(info['4_succ_task_num/task_num'])
+
+    eva_data = {}
+
+    if use_baseline is None:
+        name = load_model_path
+        eva_data['policy_name'] = name
+    else:
+        eva_data['policy_name'] = use_baseline
+
+    eva_data['succ_rate'] = succ_num / loop
+    eva_data['early_finish_rate'] = early_finish_num / loop
+    eva_data['ave_succ_step'] = sum(step_succ) / succ_num
+    eva_data['ave_early_finish_step'] = sum(step_early_finish) / early_finish_num
+    eva_data['ave_succ_acc_cost'] = sum(acc_cost) / succ_num
+    eva_data['ave_succ_ave_cost'] = sum(ave_cost) / succ_num
+    eva_data['ave_acc_reward'] = sum(acc_r) / loop
+    eva_data['ave_ave_reward'] = sum(ave_r) / loop
+    eva_data['ave_task_done'] = sum(task_num) / loop
+    eva_data['ave_early_finish_task_done'] = sum(early_finish_task_num) /early_finish_num
+    eva_data['ave_r1_task_done'] = sum(robot1_task_num) / loop
+    eva_data['ave_r2_task_done'] = sum(robot2_task_num) / loop
+    eva_data['ave_wrong_allocation_rate'] = sum(wrong_allocation_rate) / loop
+
+    for k, v in eva_data.items():
+        print(k)
+        print(v)
+
+
+
+
+
+
+
+    # ################## evaluate single episode
+    # obs = env.reset()
+    # z_o = []
+    # z_a = []
+    # z_r = []
+    # z_d = []
+    # z_i = []
+    # for i in range(300):
+    #     acts = policy.predict(obs, deterministic=True)[0]
+    #     print("predicted act:")
+    #     print(acts)
+    #     obs, rews, dones, infos = env.step(acts)
+    #     z_o.append(obs)
+    #     z_a.append(acts)
+    #     z_r.append(rews)
+    #     z_d.append(dones)
+    #     z_i.append(infos)
+    #     # print(i,acts)
+    #     if dones[0]:
+    #         break

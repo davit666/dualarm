@@ -80,7 +80,7 @@ if __name__ == "__main__":
     ######################## test a full episode with prediction
     task_config = load_config()
 
-    # task_config["task_allocator_action_type"] = "Discrete"
+    task_config["task_allocator_action_type"] = "Discrete"
 
     task_allocator_reward_type = task_config["task_allocator_reward_type"]
     task_allocator_obs_type = task_config["task_allocator_obs_type"]
@@ -137,12 +137,12 @@ if __name__ == "__main__":
     action_dist, discrete_action_space = make_custom_proba_distribution(action_space)
 
     # network
-    net_fn = CustomNetwork_FlattenNodes(node_feature_dim, mask_dim, discrete_action_space=discrete_action_space)
-    # net_fn = CustomNetwork_FlattenNodesAndEdges(node_feature_dim, mask_dim, discrete_action_space = discrete_action_space)
-    # net_fn = CustomNetwork_SelfAttention(node_feature_dim, mask_dim, discrete_action_space = discrete_action_space)
-    # net_fn = CustomNetwork_SelfCrossAttention(node_feature_dim, mask_dim, discrete_action_space = discrete_action_space)
-    # net_fn = CustomNetwork_SelfAttentionWithTaskEdge(node_feature_dim, mask_dim, discrete_action_space = discrete_action_space)
-    # net_fn = CustomNetwork_SelfCrossAttentionWithEdge(node_feature_dim, mask_dim, discrete_action_space = discrete_action_space)
+    # net_fn = CustomNetwork_FlattenNodes(node_feature_dim, mask_dim, discrete_action_space=discrete_action_space)
+    # net_fn = CustomNetwork_FlattenNodesAndEdges(node_feature_dim, mask_dim, discrete_action_space=discrete_action_space)
+    # net_fn = CustomNetwork_SelfAttention(node_feature_dim, mask_dim, discrete_action_space=discrete_action_space)
+    # net_fn = CustomNetwork_SelfCrossAttention(node_feature_dim, mask_dim, discrete_action_space=discrete_action_space)
+    # net_fn = CustomNetwork_SelfAttentionWithTaskEdge(node_feature_dim, mask_dim, discrete_action_space=discrete_action_space)
+    net_fn = CustomNetwork_SelfCrossAttentionWithEdge(node_feature_dim, mask_dim, discrete_action_space=discrete_action_space)
     print("flatten network:\n", net_fn)
 
     obs = env.reset()

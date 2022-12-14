@@ -81,6 +81,7 @@ class Env_tasks(gym.GoalEnv):
 
         self.robot_done_freeze = env_config['robot_done_freeze']
         self.use_prediction_model = env_config['use_prediction_model']
+        self.hard_mask = False
 
         ######### define gym conditions
 
@@ -312,8 +313,10 @@ class Env_tasks(gym.GoalEnv):
                 obs2 = np.concatenate([init_ee2, goal_ee2, [dist_xyz2], [dist_rz2]])
                 # others
                 node_type = np.array([0, 1])
-                # node_mask = robots_mask[i] * parts_mask[j]
-                node_mask = parts_mask[j]
+                if self.hard_mask:
+                    node_mask = robots_mask[i] * parts_mask[j]
+                else:
+                    node_mask = parts_mask[j]
 
                 node_obs = np.concatenate([obs1, obs2, node_type, [node_mask], [robots_mask[i]]])
                 self.state_info["robot_{}_node_obs_{}".format(i + 1, j + 1)] = node_obs

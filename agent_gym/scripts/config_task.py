@@ -13,12 +13,12 @@ class TaskConfig:
     model_date = env_name + "/monitoring/" + time.strftime("%m%d")
     custom_network_type = "SCAttEdge"#"custom_self_cross_attention_edge"#"custom_flatten_all"#"custom_flatten_node"#
     model_name = "real_test_1M" \
-                 + "/robot_done_terminate-predict_cost-soft_task_mask"
+                 + "/robot_done_terminate-predict_cost-coop_mask"
 
     alg_name = "PPO"
     task_allocator_reward_type = "negative_normalized_cost_with_sparse_success_bonus"
     task_allocator_obs_type = "common_dict_obs"
-    task_allocator_action_type = "MultiDiscrete" #"MultiDiscrete"
+    task_allocator_action_type = "Discrete" #"MultiDiscrete"
 
     use_prediction_model = True
 

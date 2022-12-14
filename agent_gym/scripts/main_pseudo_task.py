@@ -28,9 +28,19 @@ from custom_subproc_vec_env import CustomSubprocVecEnv
 from model_utils_task import CustomActorCriticPolicy
 
 
-def make_env(task_config):
+def make_env(task_config, renders=False):
     def _init():
-        env = Env_tasks(task_config)
+        task_allocator_reward_type = task_config["task_allocator_reward_type"]
+        task_allocator_obs_type = task_config["task_allocator_obs_type"]
+        task_allocator_action_type = task_config["task_allocator_action_type"]
+
+        env = Env_tasks(
+            task_config,
+            renders=renders,
+            task_allocator_reward_type=task_allocator_reward_type,
+            task_allocator_obs_type=task_allocator_obs_type,
+            task_allocator_action_type=task_allocator_action_type,
+        )
         return env
 
     return _init
@@ -59,6 +69,8 @@ if __name__ == '__main__':
 
     cost_model_path = task_config['cost_model_path']
     mask_model_path = task_config['mask_model_path']
+
+    use_prediction_model = task_config['use_prediction_model']
     #### load prediction model
     prediction_model = Prediction_Model(obs_type=obs_type, cost_type=cost_type, cost_model_path=cost_model_path,
                                         mask_model_path=mask_model_path)
@@ -69,7 +81,7 @@ if __name__ == '__main__':
 
     env = CustomSubprocVecEnv(
         [make_env(task_config) for i in range(num_cpu)])
-    env.load_prediction_model(prediction_model, input_type=obs_type, output_type=cost_type)
+    env.load_prediction_model(prediction_model, input_type=obs_type, output_type=cost_type,use_prediction_model=use_prediction_model)
 
     ########### define learning rate scheduler
     if task_config['use_lr_scheduler']:
@@ -94,13 +106,13 @@ if __name__ == '__main__':
     model_date = task_config['model_date']
     model_name = task_config['model_name']
     custom_network_type = task_config['custom_network_type']
-    model_type = model_date + "/{}_{}/{}_{}_{}_{}_{}".format(model_name, custom_network_type,alg_name,
+    model_type = model_date + "/{}/{}/{}_{}_{}_{}_{}".format(model_name, custom_network_type,alg_name,
                                                        reward_type, obs_type,action_type,
                                                        time.strftime("%Y-%m-%d-%H-%M-%S"))
     model_save_path = task_config['save_path']
     model_save_freq = task_config['model_save_freq']
     callback_episode_metrics = CallbackEpisodeMetrics(model_save_path + model_type,
-                                                      model_name, model_save_freq=model_save_freq,
+                                                      "model", model_save_freq=model_save_freq,
                                                       num_cpu=num_cpu)
 
     # Train the agent

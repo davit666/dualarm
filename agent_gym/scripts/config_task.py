@@ -5,19 +5,22 @@ class TaskConfig:
 
     load_model = False
     load_model_path = 'test_models/' + env_name
-    load_model_path  += '/1212/test1_not_terminate_when_robot_done_with_check_custom_flatten_node/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_MultiDiscrete_2022-12-12-09-13-20/'
-    load_model_path += "test1_not_terminate_when_robot_done_with_check_at_the_end"
+    load_model_path  += '/1214/quick_test_no_prediction/robot_done_terminate_10M_SCAttEdge/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_MultiDiscrete_2022-12-14-16-15-06/quick_test_no_prediction'
+    load_model_path += "/robot_done_terminate_10M_at_the_end"
     ######## model ########
     use_custom_network = True
 
     model_date = env_name + "/monitoring/" + time.strftime("%m%d")
-    custom_network_type = "custom_self_attention_edge"#"custom_flatten_all"#"custom_flatten_node"#
-    model_name = "real_test/part_done_terminate_10M"
+    custom_network_type = "SCAttEdge"#"custom_self_cross_attention_edge"#"custom_flatten_all"#"custom_flatten_node"#
+    model_name = "real_test_1M" \
+                 + "/robot_done_terminate-predict_cost-soft_task_mask"
 
     alg_name = "PPO"
     task_allocator_reward_type = "negative_normalized_cost_with_sparse_success_bonus"
     task_allocator_obs_type = "common_dict_obs"
-    task_allocator_action_type = "MultiDiscrete"
+    task_allocator_action_type = "MultiDiscrete" #"MultiDiscrete"
+
+    use_prediction_model = True
 
     ####### prediction model ########
     #### define input output type to use
@@ -29,7 +32,8 @@ class TaskConfig:
 
     ######## env config ########
     part_num = 6
-    robot_done_freeze = False
+    robot_done_freeze = True
+
 
     task_type = "random"
     dynamic_task = False
@@ -55,16 +59,16 @@ class TaskConfig:
     model_save_freq = 1e6
 
     ######## cpu ########
-    num_cpu = 16
+    num_cpu = 24
     ######## lr scheduler ########
-    use_lr_scheduler = True
+    use_lr_scheduler = False
     ######## parameter ########
     learning_rate = 1e-3
     n_steps = 2048
     batch_size = 2048
     n_epochs = 10
 
-    total_timesteps = 1e7
+    total_timesteps = 1e6
 
 def load_config():
     ######## train config ########
@@ -84,6 +88,8 @@ def load_config():
     task_config['task_allocator_reward_type'] = T.task_allocator_reward_type
     task_config['task_allocator_obs_type'] = T.task_allocator_obs_type
     task_config['task_allocator_action_type'] = T.task_allocator_action_type
+
+    task_config['use_prediction_model'] = T.use_prediction_model
 
     task_config['log_path'] = T.log_path
     task_config['save_path'] = T.save_path

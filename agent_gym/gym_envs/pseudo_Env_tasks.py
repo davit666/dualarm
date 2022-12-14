@@ -72,7 +72,7 @@ class Env_tasks(gym.GoalEnv):
         self._beltBaseOrn = env_config['beltBaseOrn']
         self._beltBaseColor = env_config['beltBaseColor']
 
-        self.max_cost_const = env_config['max_cost_const']
+        self.max_cost_const = env_config['max_cost_const'] if env_config['use_prediction_model'] else 2
         self.global_success_bonus = env_config['global_success_bonus']
         self.reward_scale = env_config['reward_scale']
 
@@ -80,6 +80,7 @@ class Env_tasks(gym.GoalEnv):
         self.dynamic_task = env_config['dynamic_task']
 
         self.robot_done_freeze = env_config['robot_done_freeze']
+        self.use_prediction_model = env_config['use_prediction_model']
 
         ######### define gym conditions
 
@@ -108,6 +109,8 @@ class Env_tasks(gym.GoalEnv):
     def get_action_space(self):
         if self.action_type == "MultiDiscrete":
             action_space = spaces.MultiDiscrete([self.action_dim] * self.robots_num)
+        elif self.action_type == "Discrete":
+            action_space = spaces.Discrete((self.action_dim ** self.robots_num))
         elif self.action_type == "Box":
             lower_bound = np.array([0] * (self.action_dim * self.robots_num))
             upper_bound = np.array([1] * (self.action_dim * self.robots_num))
@@ -173,6 +176,7 @@ class Env_tasks(gym.GoalEnv):
             robot.tasks_done = 0
             robot.wrong_allocation = 0
             robot.freeze_step = 0
+            robot.is_done = False
 
         ######## parts reset
         goal_poses_base = [[-0.7, -0.5], [-0.7, 0], [-0.7, 0.5], [0.7, -0.5], [0.7, 0], [0.7, 0.5]]
@@ -203,8 +207,8 @@ class Env_tasks(gym.GoalEnv):
             part.resetInitPose(init_pos, init_orn)
             #### set parts goal pose
             goal_pose_base = goal_poses_base[j]
-            goal_x = goal_pose_base[0]  # + (np.random.random() - 0.5) / 100.
-            goal_y = goal_pose_base[1]  # + (np.random.random() - 0.5) / 100.
+            goal_x = goal_pose_base[0] + (np.random.random() - 0.5) / 100.
+            goal_y = goal_pose_base[1] + (np.random.random() - 0.5) / 100.
             goal_pos = [goal_x, goal_y, self.base_height]
             goal_orn = p.getQuaternionFromEuler([0, 0, 0])
             part.resetGoalPose(goal_pos, goal_orn)
@@ -311,7 +315,7 @@ class Env_tasks(gym.GoalEnv):
                 # node_mask = robots_mask[i] * parts_mask[j]
                 node_mask = parts_mask[j]
 
-                node_obs = np.concatenate([obs1, obs2, node_type, [node_mask],[robots_mask[i]]])
+                node_obs = np.concatenate([obs1, obs2, node_type, [node_mask], [robots_mask[i]]])
                 self.state_info["robot_{}_node_obs_{}".format(i + 1, j + 1)] = node_obs
                 self.state_info["robot_{}_node_obs1_{}".format(i + 1, j + 1)] = obs1
                 self.state_info["robot_{}_node_obs2_{}".format(i + 1, j + 1)] = obs2
@@ -336,7 +340,7 @@ class Env_tasks(gym.GoalEnv):
             node_type = np.array([1, 0])
             node_mask = 1
 
-            reset_node_obs = np.concatenate([obs1, obs2, node_type, [node_mask],[robots_mask[i]]])
+            reset_node_obs = np.concatenate([obs1, obs2, node_type, [node_mask], [robots_mask[i]]])
             self.state_info["robot_{}_reset_node_obs".format(i + 1)] = reset_node_obs
             self.state_info["robot_{}_node_obs1_{}".format(i + 1, self.parts_num + 1)] = obs1
             self.state_info["robot_{}_node_obs2_{}".format(i + 1, self.parts_num + 1)] = obs2
@@ -372,7 +376,7 @@ class Env_tasks(gym.GoalEnv):
             task_edge_mask = np.array([1] * (self.parts_num + 1))
             for n in range(self.parts_num):
                 # task_edge_mask[n] = robots_mask[i] * parts_mask[n]
-                task_edge_mask[n] =  parts_mask[n]
+                task_edge_mask[n] = parts_mask[n]
 
             self.state_info["robot_{}_task_edge_xyz".format(i + 1)] = task_edge_xyz
             self.state_info["robot_{}_task_edge_rz".format(i + 1)] = task_edge_rz
@@ -392,6 +396,16 @@ class Env_tasks(gym.GoalEnv):
                 coop_edge_mask[m, n] = robots_task_edge_mask[0][m] * robots_task_edge_mask[1][n]
                 if m == n and m < self.parts_num:
                     coop_edge_mask[m, m] = 0
+                if self.robot_done_freeze:
+                    if not robots_mask[0] and m < self.parts_num:
+                        coop_edge_mask[m, n] = 0
+                    if not robots_mask[1] and n < self.parts_num:
+                        coop_edge_mask[m, n] = 0
+
+                if not self.use_prediction_model and coop_edge_mask[m, n]:
+                    dist1 = robots_nodes[0][m][8] + robots_nodes[0][m][18]
+                    dist2 = robots_nodes[1][n][8] + robots_nodes[1][n][18]
+                    coop_edge_cost[m, n] = max(dist1, dist2)
 
         self.state_info["robots_nodes"] = robots_nodes
         self.state_info['robots_task_edge_xyz'] = robots_task_edge_xyz
@@ -467,9 +481,8 @@ class Env_tasks(gym.GoalEnv):
     def step(self, allocator_action):
         self.env_step_counter += 1
 
-        # change action into 0-1 type
-        if self.action_type == "Box":
-            allocator_action = self.sample_allocator_action(allocator_action)
+        # change action into multi discrete type
+        allocator_action = self.extract_allocator_action(allocator_action)
 
         # apply_action
         cost, check = self.apply_action(allocator_action)
@@ -499,28 +512,46 @@ class Env_tasks(gym.GoalEnv):
             # print(episode_info['4_succ_task_num/task_num'])
             # print(allocator_action)
             # print(self.accumulated_reward)
+            # print("steps:  ",episode_info['1_num_steps'])
+            # print("action:  ", allocator_action)
+            # print("check:  ", check)
+            # time.sleep(1)
         else:
             episode_info = {}
             episode_info['7_status/correct_check'] = check
+            episode_info['state_info'] = self.state_info
         return observation, reward, done, episode_info
 
-    def sample_allocator_action(self, allocator_action):
-        assert len(allocator_action) == self.action_dim * self.robots_num
-        sampled_allocator_action = np.array([0] * self.robots_num)
-        for i in range(self.robots_num):
-            robot_action = allocator_action[i:i + self.action_dim]
-            if sum(robot_action) > 0:
-                idx = random.choices(np.arange(self.action_dim), weights=robot_action, k=1)[0]
-                sampled_allocator_action[i] = idx
+    def extract_allocator_action(self, allocator_action):
+        if self.action_type == "MultiDiscrete":
+            return allocator_action
+        elif self.action_type == "Box":
+            assert len(allocator_action) == self.action_dim * self.robots_num
+            extracted_allocator_action = np.array([0] * self.robots_num)
+            for i in range(self.robots_num):
+                robot_action = allocator_action[i:i + self.action_dim]
+                if sum(robot_action) > 0:
+                    idx = random.choices(np.arange(self.action_dim), weights=robot_action, k=1)[0]
+                    extracted_allocator_action[i] = idx
 
-        return sampled_allocator_action
+            return extracted_allocator_action
+        elif self.action_type == "Discrete":
+
+            extracted_allocator_action = np.array([0] * self.robots_num)
+            extracted_allocator_action[0] = allocator_action // (self.parts_num + 1)
+            extracted_allocator_action[1] = allocator_action % (self.parts_num + 1)
+
+            return extracted_allocator_action
+        else:
+            return None
 
     def apply_action(self, allocator_action):
         cost = 0
         check = 0
-        assert self.prediction_updated
+        if self.use_prediction_model:
+            assert self.prediction_updated
         if self._renders:
-            print("allocator action:\t",allocator_action)
+            print("allocator action:\t", allocator_action)
         coop_mask = self.state_info['coop_edge_mask'][allocator_action[0], allocator_action[1]]
         coop_cost = self.state_info['coop_edge_cost'][allocator_action[0], allocator_action[1]]
 
@@ -530,7 +561,6 @@ class Env_tasks(gym.GoalEnv):
             for i, robot in enumerate(self.robots):
                 if robot.is_done and allocator_action[i] != self.parts_num:
                     coop_mask = 0
-
         if coop_mask == 0:
             check = 0
             if self._renders:
@@ -550,7 +580,7 @@ class Env_tasks(gym.GoalEnv):
                     # done robot wont move
                     if self.robot_done_freeze:
                         assert robot_action == self.parts_num
-                        break
+                        continue
                     # done robot could move
                     else:
                         if robot_action < self.parts_num:
@@ -624,27 +654,34 @@ class Env_tasks(gym.GoalEnv):
         return self.terminated
 
     def sample_action(self):
-        action_list = np.arange(self.parts_num + 1)
-        mask = self.state_info["robots_task_edge_mask"]
-        action = []
+        if self.action_type == "MultiDiscrete":
+            action_list = np.arange(self.parts_num + 1)
+            mask = self.state_info["robots_task_edge_mask"]
+            action = []
 
-        # for i in range(self.robots_num):
-        #     prob = np.array(mask[i]) / sum(mask[i])
-        #     act = np.random.choice(action_list, p=prob)
-        #     action.append(act)
+            prob1 = np.array(mask[0]) / sum(mask[0])
+            act1 = np.random.choice(action_list, p=prob1)
+            action.append(act1)
 
-        prob1 = np.array(mask[0]) / sum(mask[0])
-        act1 = np.random.choice(action_list, p=prob1)
-        action.append(act1)
+            if act1 < self.parts_num:
+                mask[1][act1] = 0
+            prob2 = np.array(mask[1]) / sum(mask[1])
+            act2 = np.random.choice(action_list, p=prob2)
+            action.append(act2)
 
-        if act1 < self.parts_num:
-            mask[1][act1] = 0
-        prob2 = np.array(mask[1]) / sum(mask[1])
-        act2 = np.random.choice(action_list, p=prob2)
-        action.append(act2)
+            return np.array(action)
+        elif self.action_type == "Discrete":
+            action_list = np.arange((self.parts_num + 1) ** self.robots_num)
+            mask = self.state_info["coop_edge_mask"].flatten()
+            action = []
+            prob = mask / sum(mask)
+            act = np.random.choice(action_list, p=prob)
+            action.append(act)
 
+            return np.array(action)
 
-        return np.array(action)
+        else:
+            return None
     ####################################### task allocators ################################
     # def distance_based_allocator(self, obs=None):
     #     ######## allocate closest tasks to robots

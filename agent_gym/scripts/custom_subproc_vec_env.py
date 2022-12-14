@@ -120,6 +120,8 @@ class CustomSubprocVecEnv(VecEnv):
         self.prediction_model = None
         self.prediction_model_loaded = False
 
+        self.use_prediction_model = True
+
     ####!!!!!!!!!!!!!!!!!!!!!!!!!!!! my func  ##############################################3
     def sample_action(self):
         for remote in self.remotes:
@@ -128,7 +130,7 @@ class CustomSubprocVecEnv(VecEnv):
 
         return np.stack(acts)
 
-    def load_prediction_model(self, model, input_type=None, output_type=None):
+    def load_prediction_model(self, model, input_type=None, output_type=None, use_prediction_model = True):
         self.prediction_model = model
         assert input_type == self.prediction_model.obs_type
         assert output_type == self.prediction_model.cost_type
@@ -140,6 +142,7 @@ class CustomSubprocVecEnv(VecEnv):
         self.mask_shape = len(mask_features)
 
         self.prediction_model_loaded = True
+        self.use_prediction_model = use_prediction_model
         return self.prediction_model_loaded
 
     def predict_cost_and_mask(self, obs):
@@ -191,8 +194,9 @@ class CustomSubprocVecEnv(VecEnv):
 
         ######## my code ######
         obs = _flatten_obs(obs, self.observation_space)
-        obs = self.predict_cost_and_mask(obs)
-        self.update_cost_and_mask(obs)
+        if self.use_prediction_model:
+            obs = self.predict_cost_and_mask(obs)
+            self.update_cost_and_mask(obs)
 
         #######################3
         return obs, np.stack(rews), np.stack(dones), infos
@@ -211,8 +215,9 @@ class CustomSubprocVecEnv(VecEnv):
 
         ######## my code ######
         obs = _flatten_obs(obs, self.observation_space)
-        obs = self.predict_cost_and_mask(obs)
-        self.update_cost_and_mask(obs)
+        if self.use_prediction_model:
+            obs = self.predict_cost_and_mask(obs)
+            self.update_cost_and_mask(obs)
 
         #######################3
 

@@ -34,13 +34,23 @@ from model_utils_task import (
     CustomFeatureExtractor,
     CustomNetwork_FlattenNodes,
     CustomNetwork_FlattenNodesAndEdges,
-    make_custom_proba_distribution_multidiscrete,
+    make_custom_proba_distribution,
 )
 
 
-def make_env(task_config):
+def make_env(task_config, renders=False):
     def _init():
-        env = Env_tasks(task_config)
+        task_allocator_reward_type = task_config["task_allocator_reward_type"]
+        task_allocator_obs_type = task_config["task_allocator_obs_type"]
+        task_allocator_action_type = task_config["task_allocator_action_type"]
+
+        env = Env_tasks(
+            task_config,
+            renders=renders,
+            task_allocator_reward_type=task_allocator_reward_type,
+            task_allocator_obs_type=task_allocator_obs_type,
+            task_allocator_action_type=task_allocator_action_type,
+        )
         return env
 
     return _init
@@ -69,10 +79,18 @@ if __name__ == "__main__":
 
     ######################## test a full episode with prediction
     task_config = load_config()
-    num_cpu = 1
 
-    env = CustomSubprocVecEnv([make_env(task_config) for i in range(num_cpu)])
-    env.load_prediction_model(prediction_model, input_type=obs_type, output_type=cost_type)
+    # task_config["task_allocator_action_type"] = "Discrete"
+
+    task_allocator_reward_type = task_config["task_allocator_reward_type"]
+    task_allocator_obs_type = task_config["task_allocator_obs_type"]
+    task_allocator_action_type = task_config["task_allocator_action_type"]
+
+    num_cpu = 1
+    use_prediction_model = task_config["use_prediction_model"]
+
+    env = CustomSubprocVecEnv([make_env(task_config, renders=False) for i in range(num_cpu)])
+    env.load_prediction_model(prediction_model, input_type=obs_type, output_type=cost_type, use_prediction_model=use_prediction_model)
 
     obs = env.reset()
     # z_o = []
@@ -82,7 +100,9 @@ if __name__ == "__main__":
     # z_i = []
     # for i in range(100):
     #     acts = env.sample_action()
+    #     print(acts)
     #     obs, rews, dones, infos = env.step(acts)
+
     #     z_o.append(obs)
     #     z_a.append(acts)
     #     z_r.append(rews)
@@ -111,19 +131,23 @@ if __name__ == "__main__":
 
     node_feature_dim = feature_extractor._features_dim
     mask_dim = feature_extractor.mask_dim
-    # net_fn = CustomNetwork_FlattenNodes(node_feature_dim, mask_dim)
-    # net_fn = CustomNetwork_FlattenNodesAndEdges(node_feature_dim, mask_dim)
-    # net_fn = CustomNetwork_SelfAttention(node_feature_dim, mask_dim)
-    # net_fn = CustomNetwork_SelfCrossAttention(node_feature_dim, mask_dim)
-    # net_fn = CustomNetwork_SelfAttentionWithTaskEdge(node_feature_dim, mask_dim)
-    net_fn = CustomNetwork_SelfCrossAttentionWithEdge(node_feature_dim, mask_dim)
-    print("flatten network:\n", net_fn)
 
     # distribution
     action_space = env.action_space
-    action_dist = make_custom_proba_distribution_multidiscrete(action_space)
+    action_dist, discrete_action_space = make_custom_proba_distribution(action_space)
+
+    # network
+    net_fn = CustomNetwork_FlattenNodes(node_feature_dim, mask_dim, discrete_action_space=discrete_action_space)
+    # net_fn = CustomNetwork_FlattenNodesAndEdges(node_feature_dim, mask_dim, discrete_action_space = discrete_action_space)
+    # net_fn = CustomNetwork_SelfAttention(node_feature_dim, mask_dim, discrete_action_space = discrete_action_space)
+    # net_fn = CustomNetwork_SelfCrossAttention(node_feature_dim, mask_dim, discrete_action_space = discrete_action_space)
+    # net_fn = CustomNetwork_SelfAttentionWithTaskEdge(node_feature_dim, mask_dim, discrete_action_space = discrete_action_space)
+    # net_fn = CustomNetwork_SelfCrossAttentionWithEdge(node_feature_dim, mask_dim, discrete_action_space = discrete_action_space)
+    print("flatten network:\n", net_fn)
 
     obs = env.reset()
+    actions = env.sample_action()
+    obs, rews, dones, infos = env.step(actions)
     observation = {}
     for key, _ in obs.items():
         # print(obs[key])
@@ -146,7 +170,7 @@ if __name__ == "__main__":
         results[key] = encoded_obs[key].cpu().detach().numpy()
 
     distribution = action_dist.proba_distribution(action_logits=pi_logits)
-    actions = distribution.get_actions(deterministic=False)
+    actions = distribution.get_actions(deterministic=True)
 
     actions = actions.cpu().detach().numpy()
     pi_logits, vf_logits = pi_logits.cpu().detach().numpy(), vf_logits.cpu().detach().numpy()
@@ -155,12 +179,18 @@ if __name__ == "__main__":
 
     ################# test action sample
 
-    # env0 = Env_tasks(task_config)
+    env0 = Env_tasks(
+        task_config,
+        renders=False,
+        task_allocator_reward_type=task_allocator_reward_type,
+        task_allocator_obs_type=task_allocator_obs_type,
+        task_allocator_action_type=task_allocator_action_type,
+    )
 
-    # act1 = env0.action_space.sample()
-    # act2 = env.sample_action()
+    act1 = env0.action_space.sample()
+    act2 = env.sample_action()
 
-    #################
+    ################
 
     #################################################################################### test custom subproc env
     # train_config, env_config = load_config()

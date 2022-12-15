@@ -12,7 +12,7 @@ class TaskConfig:
 
     model_date = env_name + "/monitoring/" + time.strftime("%m%d")
     custom_network_type = "SCAttEdge"#"custom_self_cross_attention_edge"#"custom_flatten_all"#"custom_flatten_node"#
-    model_name = "real_test_1M" \
+    model_name = "real_test_20M" \
                  + "/robot_done_terminate-predict_cost-coop_mask"
 
     alg_name = "PPO"
@@ -68,7 +68,7 @@ class TaskConfig:
     batch_size = 2048
     n_epochs = 10
 
-    total_timesteps = 1e6
+    total_timesteps = 2e7
 
 def load_config():
     ######## train config ########

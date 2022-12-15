@@ -656,7 +656,7 @@ class Env_tasks(gym.GoalEnv):
 
         return self.terminated
 
-    def sample_action(self):
+    def sample_action(self, use_baseline="min_cost"):
         if self.action_type == "MultiDiscrete":
             action_list = np.arange(self.parts_num + 1)
             mask = self.state_info["robots_task_edge_mask"]
@@ -675,13 +675,66 @@ class Env_tasks(gym.GoalEnv):
             return np.array(action)
         elif self.action_type == "Discrete":
             action_list = np.arange((self.parts_num + 1) ** self.robots_num)
-            mask = self.state_info["coop_edge_mask"].flatten()
+            mask = self.state_info["coop_edge_mask"].copy()
             action = []
-            prob = mask / sum(mask)
-            act = np.random.choice(action_list, p=prob)
-            action.append(act)
 
-            return np.array(action)
+            if use_baseline == "random":
+                mask[self.parts_num, self.parts_num] = 0
+                mask0 = np.zeros((self.parts_num + 1, self.parts_num + 1))
+                for m in range(self.parts_num):
+                    for n in range(self.parts_num):
+                        mask0[m, n] = 1
+                mask0 = (mask * mask0)
+                mask0 = mask0.flatten()
+                mask = mask.flatten()
+
+                if sum(mask0) >= 1:
+                    prob = mask0 / sum(mask0)
+                    act = np.random.choice(action_list, p=prob)
+                elif sum(mask) >= 1:
+                    prob = mask / sum(mask)
+                    act = np.random.choice(action_list, p=prob)
+                else:
+                    act = (self.parts_num + 1) ** self.robots_num - 1
+                action.append(act)
+                return np.array(action)
+
+            elif use_baseline == "min_cost":
+                mask[self.parts_num, self.parts_num] = 0
+                mask0 = np.zeros((self.parts_num + 1, self.parts_num + 1))
+                for m in range(self.parts_num):
+                    for n in range(self.parts_num):
+                        mask0[m, n] = 1
+                mask0 = (mask * mask0)
+                # print(mask0)
+                mask0 = mask0.flatten()
+                mask = mask.flatten()
+                cost = self.state_info["coop_edge_cost"].copy()
+                # print(cost)
+                cost = cost.flatten()
+                if sum(mask0) >= 1:
+                    # print("in A")
+                    cost = cost * mask0 + self.max_cost_const * (1 - mask0) * 10
+                    act = np.argmin(cost)
+                    assert mask0[act]
+                elif sum(mask) >= 1:
+                    # print("in B")
+                    cost = cost * mask + self.max_cost_const * (1 - mask) * 10
+                    act = np.argmin(cost)
+                    assert mask[act]
+                else:
+                    # print("in C")
+                    act = (self.parts_num + 1) ** self.robots_num - 1
+                action.append(act)
+                # print(act)
+                return np.array(action)
+
+            else:
+                mask = mask.flatten()
+                prob = mask / sum(mask)
+                act = np.random.choice(action_list, p=prob)
+                action.append(act)
+                return np.array(action)
 
         else:
             return None

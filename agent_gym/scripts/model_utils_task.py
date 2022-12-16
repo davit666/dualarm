@@ -55,7 +55,9 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
         # self.mlp_extractor = CustomNetwork_SelfAttention(self.node_features_dim, self.mask_dim, discrete_action_space = self.discrete_action_space)
         # self.mlp_extractor = CustomNetwork_SelfCrossAttention(self.node_features_dim, self.mask_dim, discrete_action_space = self.discrete_action_space)
         # self.mlp_extractor = CustomNetwork_SelfAttentionWithTaskEdge(self.node_features_dim, self.mask_dim, discrete_action_space = self.discrete_action_space)
-        self.mlp_extractor = CustomNetwork_SelfCrossAttentionWithEdge(self.node_features_dim, self.mask_dim,
+        # self.mlp_extractor = CustomNetwork_SelfCrossAttentionWithEdge(self.node_features_dim, self.mask_dim,
+        #                                                               discrete_action_space=self.discrete_action_space)
+        self.mlp_extractor = CustomNetwork_SelfCrossAttentionWithNodeAndEdge(self.node_features_dim, self.mask_dim,
                                                                       discrete_action_space=self.discrete_action_space)
 
 
@@ -328,7 +330,6 @@ class CustomNetwork_SelfAttention(nn.Module):
         f_r1 = features["robot_1_node"]
         f_r2 = features["robot_2_node"]
 
-
         mask1 = th.unsqueeze(features["robot_1_task_edge_mask"], 1)
         mask2 = th.unsqueeze(features["robot_2_task_edge_mask"], 1)
 
@@ -426,7 +427,6 @@ class CustomNetwork_SelfCrossAttention(CustomNetwork_SelfAttention):
         self.robot2_decoder1 = MultiHeadSelfCrossAttention(self.feature_dim, self.head_num, self.feature_dim)
         self.robot2_decoder2 = MultiHeadSelfCrossAttention(self.feature_dim, self.head_num, self.latent_dim_pi)
 
-
     def decode_feature(self, features):
         f_r1 = features["robot_1_node"]
         f_r2 = features["robot_2_node"]
@@ -496,7 +496,6 @@ class CustomNetwork_SelfAttentionWithTaskEdge(CustomNetwork_SelfAttention):
         self.robot2_decoder1 = MultiHeadAttentionWithEdge(feature_dim, self.head_num, feature_dim)
         self.robot2_decoder2 = MultiHeadAttentionWithEdge(feature_dim, self.head_num, self.latent_dim_pi)
 
-
     def decode_feature(self, features):
         f_r1 = features["robot_1_node"]
         f_r2 = features["robot_2_node"]
@@ -563,6 +562,84 @@ class CustomNetwork_SelfCrossAttentionWithEdge(CustomNetwork_SelfAttention):
         self.robot2_decoder1 = MultiHeadSelfCrossAttentionWithEdge(self.feature_dim, self.head_num, self.feature_dim)
         self.robot2_decoder2 = MultiHeadSelfCrossAttentionWithEdge(self.feature_dim, self.head_num, self.latent_dim_pi)
 
+    def decode_feature(self, features):
+        f_r1 = features["robot_1_node"]
+        f_r2 = features["robot_2_node"]
+
+        edge_r1 = features["robot_1_task_edge_dist"]
+        edge_r2 = features["robot_2_task_edge_dist"]
+        edge_coop = features["coop_edge_cost"]
+
+        mask1 = th.unsqueeze(features["robot_1_task_edge_mask"], 1)
+        mask2 = th.unsqueeze(features["robot_2_task_edge_mask"], 1)
+
+        coop_mask = features["coop_edge_mask"]
+        # print(coop_mask.shape, "!!!!!!!!!!!", mask1.shape)
+
+        f_r1_1 = self.robot1_decoder1(f_r1, f_r2, edge_r1, edge_coop, masks=mask1, maskc=coop_mask)
+        f_r2_1 = self.robot2_decoder1(f_r2, f_r1, edge_r2, edge_coop.transpose(-3, -2), masks=mask2,
+                                      maskc=coop_mask.transpose(-2, -1))
+        # print("!!!!!!!!!!!!!!!!!!!11111!!!")
+        # print(f_r1.shape, f_r2.shape)
+        f_r1_2 = self.robot1_decoder2(f_r1_1, f_r2_1, edge_r1, edge_coop, masks=mask1, maskc=coop_mask)
+        f_r2_2 = self.robot2_decoder2(f_r2_1, f_r1_1, edge_r2, edge_coop.transpose(-3, -2), masks=mask2,
+                                      maskc=coop_mask.transpose(-2, -1))
+
+        # print("3333333333333333333333333333333")
+        # print(f_r1[:, :, :5].detach().numpy())
+
+        return f_r1_2, f_r2_2
+
+
+########### self and cross attention with edges and nodes
+
+from multi_head_attention import MultiHeadSelfCrossAttentionWithNodeAndEdge
+
+
+class CustomNetwork_SelfCrossAttentionWithNodeAndEdge(CustomNetwork_SelfAttention):
+    """
+    this network use self attention to decode node and task edge features
+
+    :param feature_dim: dimension of the features extracted with the features_extractor (e.g. features from a CNN)
+    :param last_layer_dim_pi: (int) number of units for the last layer of the policy network
+    :param last_layer_dim_vf: (int) number of units for the last layer of the value network
+    """
+
+    def __init__(
+            self,
+            feature_dim: int,
+            mask_dim: int,
+            last_layer_dim_pi: int = latent_dim,
+            last_layer_dim_vf: int = latent_dim,
+            discrete_action_space: bool = False,
+    ):
+        super(CustomNetwork_SelfCrossAttentionWithNodeAndEdge, self).__init__(
+            feature_dim=feature_dim,
+            mask_dim=mask_dim,
+            last_layer_dim_pi=latent_dim,
+            last_layer_dim_vf=latent_dim,
+            discrete_action_space=discrete_action_space
+        )
+
+        # IMPORTANT:
+        self.feature_dim = feature_dim
+        self.mask_dim = mask_dim
+        self.discrete_action_space = discrete_action_space
+        # Save output dimensions, used to create the distributions
+        self.latent_dim_pi = 16
+        self.latent_dim_vf = 64
+        self.head_num = 8 // 2
+
+        # node decoder
+        self.robot1_decoder1 = MultiHeadSelfCrossAttentionWithNodeAndEdge(self.feature_dim, self.head_num,
+                                                                          self.feature_dim)
+        self.robot1_decoder2 = MultiHeadSelfCrossAttentionWithNodeAndEdge(self.feature_dim, self.head_num,
+                                                                          self.latent_dim_pi)
+
+        self.robot2_decoder1 = MultiHeadSelfCrossAttentionWithNodeAndEdge(self.feature_dim, self.head_num,
+                                                                          self.feature_dim)
+        self.robot2_decoder2 = MultiHeadSelfCrossAttentionWithNodeAndEdge(self.feature_dim, self.head_num,
+                                                                          self.latent_dim_pi)
 
     def decode_feature(self, features):
         f_r1 = features["robot_1_node"]
@@ -579,11 +656,12 @@ class CustomNetwork_SelfCrossAttentionWithEdge(CustomNetwork_SelfAttention):
         # print(coop_mask.shape, "!!!!!!!!!!!", mask1.shape)
 
         f_r1_1 = self.robot1_decoder1(f_r1, f_r2, edge_r1, edge_coop, masks=mask1, maskc=coop_mask)
-        f_r2_1 = self.robot2_decoder1(f_r2, f_r1, edge_r2, edge_coop, masks=mask2, maskc=coop_mask.transpose(-2, -1))
+        f_r2_1 = self.robot2_decoder1(f_r2, f_r1, edge_r2, edge_coop.transpose(-3, -2), masks=mask2,
+                                      maskc=coop_mask.transpose(-2, -1))
         # print("!!!!!!!!!!!!!!!!!!!11111!!!")
         # print(f_r1.shape, f_r2.shape)
         f_r1_2 = self.robot1_decoder2(f_r1_1, f_r2_1, edge_r1, edge_coop, masks=mask1, maskc=coop_mask)
-        f_r2_2 = self.robot2_decoder2(f_r2_1, f_r1_1, edge_r2, edge_coop, masks=mask2,
+        f_r2_2 = self.robot2_decoder2(f_r2_1, f_r1_1, edge_r2, edge_coop.transpose(-3, -2), masks=mask2,
                                       maskc=coop_mask.transpose(-2, -1))
 
         # print("3333333333333333333333333333333")

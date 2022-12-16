@@ -11,9 +11,9 @@ class TaskConfig:
     use_custom_network = True
 
     model_date = env_name + "/monitoring/" + time.strftime("%m%d")
-    custom_network_type = "SCAttEdge"#"custom_self_cross_attention_edge"#"custom_flatten_all"#"custom_flatten_node"#
-    model_name = "real_test_20M" \
-                 + "/robot_done_terminate-predict_cost-coop_mask"
+    custom_network_type = "SCAttNE"#"custom_self_cross_attention_edge"#"custom_flatten_all"#"custom_flatten_node"#
+    model_name = "quick_test_5M_fix_rest_pose" \
+                 + "/RNT_P_CM"
 
     alg_name = "PPO"
     task_allocator_reward_type = "negative_normalized_cost_with_sparse_success_bonus"
@@ -32,7 +32,8 @@ class TaskConfig:
 
     ######## env config ########
     part_num = 6
-    robot_done_freeze = True
+    robot_done_freeze = False
+    default_rest_pose = True
 
 
     task_type = "random"
@@ -68,7 +69,7 @@ class TaskConfig:
     batch_size = 2048
     n_epochs = 10
 
-    total_timesteps = 2e7
+    total_timesteps = 5e6
 
 def load_config():
     ######## train config ########
@@ -90,6 +91,7 @@ def load_config():
     task_config['task_allocator_action_type'] = T.task_allocator_action_type
 
     task_config['use_prediction_model'] = T.use_prediction_model
+    task_config['default_rest_pose'] = T.default_rest_pose
 
     task_config['log_path'] = T.log_path
     task_config['save_path'] = T.save_path

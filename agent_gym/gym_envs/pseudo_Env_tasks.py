@@ -18,6 +18,7 @@ from pkg_resources import normalize_path, parse_version
 
 from Env_gr import Env_gr
 from bullet_env import tools
+from bullet_env.pseudo_plot import PseudoPlot
 from bullet_env.pseudo_robot import PseudoRobot, PseudoPart
 
 maximum_cost = 10000
@@ -81,6 +82,7 @@ class Env_tasks(gym.GoalEnv):
 
         self.robot_done_freeze = env_config['robot_done_freeze']
         self.use_prediction_model = env_config['use_prediction_model']
+        self.default_rest_pose = env_config['default_rest_pose']
         self.hard_mask = False
 
         ######### define gym conditions
@@ -146,6 +148,15 @@ class Env_tasks(gym.GoalEnv):
         self.robots_num = len(self.robots)
         self.parts_num = len(self.parts)
 
+        self.reset_robots()
+        self.reset_parts()
+
+        if self._renders:
+            self.plot = PseudoPlot(img_width=128, img_height=128, dpi=64)
+
+            self.plot.setup(self.global_workspace, self.robots, self.parts)
+            self.plot.fig.show()
+
         self.reset()
 
     def update_workspace(self, robot=None):
@@ -171,14 +182,35 @@ class Env_tasks(gym.GoalEnv):
         # self.accumulated_reward_dict['task'] = 0
         self.prediction_updated = False
 
-        ######## robot reset#########################################################################################
+       ############################################################################
+        self.reset_robots()
+        self.reset_parts()
+
+        ######## get obs and update state history
+        self.observation_history = []
+        self.state_info = {}
+        obs = self._observation()
+        self.prev_state_info = self.state_info.copy()
+
+        if self._renders:
+            # time.sleep(1)
+            assert self.plot is not None
+            self.plot.update_plot(self.robots, self.parts)
+            self.plot.fig.show()
+
+        return obs
+    def reset_robots(self):
+        ######## robot reset#############
         for robot in self.robots:
-            robot.reset()
+            robot.reset(default_goal_pose = self.default_rest_pose)
             robot.tasks_done = 0
             robot.wrong_allocation = 0
             robot.freeze_step = 0
             robot.is_done = False
 
+        return True
+
+    def reset_parts(self):
         ######## parts reset
         goal_poses_base = [[-0.7, -0.5], [-0.7, 0], [-0.7, 0.5], [0.7, -0.5], [0.7, 0], [0.7, 0.5]]
         init_poses_base = [[-0.25, -0.5], [-0.25, 0], [-0.25, 0.5], [0.25, -0.5], [0.25, 0], [0.25, 0.5]]
@@ -208,21 +240,15 @@ class Env_tasks(gym.GoalEnv):
             part.resetInitPose(init_pos, init_orn)
             #### set parts goal pose
             goal_pose_base = goal_poses_base[j]
-            goal_x = goal_pose_base[0] + (np.random.random() - 0.5) / 100.
-            goal_y = goal_pose_base[1] + (np.random.random() - 0.5) / 100.
+            goal_x = goal_pose_base[0] + (np.random.random() - 0.5) / 10.
+            goal_y = goal_pose_base[1] + (np.random.random() - 0.5) / 10.
             goal_pos = [goal_x, goal_y, self.base_height]
             goal_orn = p.getQuaternionFromEuler([0, 0, 0])
             part.resetGoalPose(goal_pos, goal_orn)
 
             part.reset()
 
-        ######## get obs and update state history
-        self.observation_history = []
-        self.state_info = {}
-        obs = self._observation()
-        self.prev_state_info = self.state_info.copy()
-
-        return obs
+        return True
 
     def _observation(self):
         state_dict = self.get_states()
@@ -498,6 +524,16 @@ class Env_tasks(gym.GoalEnv):
         self.accumulated_reward += reward
         # check termination
         done = self._termination()
+
+
+        ## update plot
+        if self._renders:
+            # time.sleep(1)
+            assert self.plot is not None
+            self.plot.update_plot(self.robots, self.parts)
+            self.plot.fig.show()
+
+
         if done:
             episode_info = {}
             episode_info['1_num_steps'] = self.env_step_counter
@@ -649,14 +685,21 @@ class Env_tasks(gym.GoalEnv):
                     self.failed = True
 
         else:
-            # terminate when task and robot done
-            if all([robot.is_done for robot in self.robots]) and (self.succ_parts_num == self.parts_num):
+            # # terminate when task and robot done
+            # if all([robot.is_done for robot in self.robots]) and (self.succ_parts_num == self.parts_num):
+            #     self.terminated = True
+            #     self.success = True
+            # terminated when robot done
+            if all([robot.is_done for robot in self.robots]):
                 self.terminated = True
-                self.success = True
+                if self.succ_parts_num == self.parts_num:
+                    self.success = True
+                else:
+                    self.failed = True
 
         return self.terminated
 
-    def sample_action(self, use_baseline="min_cost"):
+    def sample_action(self, use_baseline="min_cost_sample"):
         if self.action_type == "MultiDiscrete":
             action_list = np.arange(self.parts_num + 1)
             mask = self.state_info["robots_task_edge_mask"]
@@ -678,7 +721,7 @@ class Env_tasks(gym.GoalEnv):
             mask = self.state_info["coop_edge_mask"].copy()
             action = []
 
-            if use_baseline == "random":
+            if use_baseline == "random_sample":
                 mask[self.parts_num, self.parts_num] = 0
                 mask0 = np.zeros((self.parts_num + 1, self.parts_num + 1))
                 for m in range(self.parts_num):
@@ -699,7 +742,7 @@ class Env_tasks(gym.GoalEnv):
                 action.append(act)
                 return np.array(action)
 
-            elif use_baseline == "min_cost":
+            elif use_baseline == "min_cost_sample":
                 mask[self.parts_num, self.parts_num] = 0
                 mask0 = np.zeros((self.parts_num + 1, self.parts_num + 1))
                 for m in range(self.parts_num):

@@ -161,13 +161,13 @@ class PseudoRobot:
 
         return True
 
-    def reset(self, reset_init_pos=True, init_pos=None, goal_pos=None):
+    def reset(self, reset_init_pos=True, init_pos=None, goal_pos=None, default_goal_pose = True):
 
         if reset_init_pos:
             self.init_EE_pos = self.sample_EE_pose(self.init_state) if init_pos is None else init_pos
             self.initialize_by_EE_pose(self.init_EE_pos)
 
-        self.resetGoalPose(goal_pos)
+        self.resetGoalPose(goal_pos, default_pose=default_goal_pose)
         self.resetInitPose(default_pose=True)
         # self.init_JS_pos = self.getObservation_JS()
         self.sucking = False
@@ -205,9 +205,11 @@ class PseudoRobot:
             self.init_EE_pos = np.concatenate((self.init_pose[:3], p.getQuaternionFromEuler(init_rpy)[:]))
         return self.init_pose
 
-    def resetGoalPose(self, goal_pose=None, default_pose=False):
+    def resetGoalPose(self, goal_pose=None, default_pose=True):
         if default_pose:
             self.goal_EE_pos = self.default_goal_pose.copy()
+            self.goal_EE_pos[0] += (np.random.random() - 0.5) / 10.
+            self.goal_EE_pos[1] += (np.random.random() - 0.5) / 10.
             self.goal = np.concatenate((self.goal_EE_pos[:3], p.getEulerFromQuaternion(self.goal_EE_pos[3:])[
                                                               -1:])) if self.useInverseKinematics else self.goal_EE_pos
         elif goal_pose is not None:

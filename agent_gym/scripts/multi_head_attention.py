@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 # __all__ = ['MultiHeadAttention', 'ScaledDotProductAttention']
 
 
@@ -34,6 +35,7 @@ class ScaledDotProductAttention(nn.Module):
         # print(output[:5, :5, :5].detach().numpy())
         return output
 
+
 class ScaledDotProductAttentionwithEdge(nn.Module):
 
     def forward(self, query, key, value, mask=None):
@@ -41,14 +43,14 @@ class ScaledDotProductAttentionwithEdge(nn.Module):
         # print(query.shape, key.shape, value.shape)
         dk = query.size()[-1]
         # print("dk    ", dk)
-        query = torch.unsqueeze(query,dim = -2)
+        query = torch.unsqueeze(query, dim=-2)
         # print("q',k,v")
         # print(query.shape, key.shape, value.shape)
 
         scores = query.matmul(key.transpose(-2, -1)) / math.sqrt(dk)
         # print("score")
         # print(scores.shape)
-        scores = torch.squeeze(scores,dim = -2)
+        scores = torch.squeeze(scores, dim=-2)
         # print("score'")
         # print(scores.shape)
         # print(scores[:5, :5, :5].detach().numpy())
@@ -65,6 +67,7 @@ class ScaledDotProductAttentionwithEdge(nn.Module):
         # print(output.shape)
         # print(output[:5, :5, :5].detach().numpy())
         return output
+
 
 class MultiHeadAttention(nn.Module):
 
@@ -149,10 +152,6 @@ class MultiHeadAttention(nn.Module):
         )
 
 
-
-
-
-
 class MultiHeadSelfCrossAttention(nn.Module):
 
     def __init__(self,
@@ -177,13 +176,13 @@ class MultiHeadSelfCrossAttention(nn.Module):
         self.head_num = head_num // 2
         self.activation = activation
         self.bias = bias
-        self.linear_qs = nn.Linear(in_features , in_features // 2, bias)
-        self.linear_ks = nn.Linear(in_features , in_features // 2, bias)
-        self.linear_vs = nn.Linear(in_features , in_features // 2, bias)
+        self.linear_qs = nn.Linear(in_features, in_features // 2, bias)
+        self.linear_ks = nn.Linear(in_features, in_features // 2, bias)
+        self.linear_vs = nn.Linear(in_features, in_features // 2, bias)
 
-        self.linear_qc = nn.Linear(in_features , in_features // 2, bias)
-        self.linear_kc = nn.Linear(in_features , in_features // 2, bias)
-        self.linear_vc = nn.Linear(in_features , in_features // 2, bias)
+        self.linear_qc = nn.Linear(in_features, in_features // 2, bias)
+        self.linear_kc = nn.Linear(in_features, in_features // 2, bias)
+        self.linear_vc = nn.Linear(in_features, in_features // 2, bias)
 
         self.linear_o = nn.Linear(in_features, output_dim, bias)
 
@@ -259,7 +258,6 @@ class MultiHeadSelfCrossAttention(nn.Module):
         )
 
 
-
 class MultiHeadAttentionWithEdge(MultiHeadAttention):
 
     def __init__(self,
@@ -276,11 +274,11 @@ class MultiHeadAttentionWithEdge(MultiHeadAttention):
         :param activation: The activation after each linear transformation.
         """
         super(MultiHeadAttentionWithEdge, self).__init__(
-                 in_features = in_features,
-                 head_num = head_num,
-                 output_dim = output_dim,
-                 bias=bias,
-                 activation=activation)
+            in_features=in_features,
+            head_num=head_num,
+            output_dim=output_dim,
+            bias=bias,
+            activation=activation)
 
     def forward(self, q, k, v, mask=None):
         q, k, v = self.linear_q(q), self.linear_k(k), self.linear_v(v)
@@ -313,7 +311,6 @@ class MultiHeadAttentionWithEdge(MultiHeadAttention):
             .reshape(batch_size * self.head_num, seq_len, seq_len, sub_dim)
 
 
-
 class MultiHeadSelfCrossAttentionWithEdge(MultiHeadSelfCrossAttention):
 
     def __init__(self,
@@ -330,11 +327,11 @@ class MultiHeadSelfCrossAttentionWithEdge(MultiHeadSelfCrossAttention):
         :param activation: The activation after each linear transformation.
         """
         super(MultiHeadSelfCrossAttentionWithEdge, self).__init__(
-                 in_features = in_features,
-                 head_num = head_num,
-                 output_dim = output_dim,
-                 bias=bias,
-                 activation=activation)
+            in_features=in_features,
+            head_num=head_num,
+            output_dim=output_dim,
+            bias=bias,
+            activation=activation)
 
         self.linear_qs = nn.Linear(in_features, in_features // 2, bias)
         self.linear_ks = nn.Linear(in_features, in_features // 2, bias)
@@ -347,6 +344,94 @@ class MultiHeadSelfCrossAttentionWithEdge(MultiHeadSelfCrossAttention):
     def forward(self, f1, f2, edges, edgec, masks=None, maskc=None):
         qs, ks, vs = self.linear_qs(f1), self.linear_ks(edges), self.linear_vs(f1)
         qc, kc, vc = self.linear_qc(f1), self.linear_kc(edgec), self.linear_vc(f2)
+
+        if self.activation is not None:
+            qs = self.activation(qs)
+            ks = self.activation(ks)
+            vs = self.activation(vs)
+            qc = self.activation(qc)
+            kc = self.activation(kc)
+            vc = self.activation(vc)
+
+        qs = self._reshape_to_batches(qs)
+        ks = self._reshape_to_batches_edge(ks)
+        vs = self._reshape_to_batches(vs)
+        qc = self._reshape_to_batches(qc)
+        kc = self._reshape_to_batches_edge(kc)
+        vc = self._reshape_to_batches(vc)
+        if masks is not None:
+            masks = masks.repeat(self.head_num, 1, 1)
+            maskc = maskc.repeat(self.head_num, 1, 1)
+
+        # print(masks.shape, maskc.shape)
+        ys = ScaledDotProductAttentionwithEdge()(qs, ks, vs, masks)
+        # print(ys.shape)
+        ys = self._reshape_from_batches(ys)
+
+        yc = ScaledDotProductAttentionwithEdge()(qc, kc, vc, maskc)
+        # print(yc.shape)
+        yc = self._reshape_from_batches(yc)
+
+        # print("$$$$$$$$$$$$$$$$$$$$$$$$")
+        # print(y[:, :, :5].detach().numpy())
+
+        y = torch.cat([ys, yc], dim=-1)
+
+        y = self.linear_o(y)
+        if self.activation is not None:
+            y = self.activation(y)
+        return y
+
+    def _reshape_to_batches_edge(self, x):
+        batch_size, seq_len, _, in_feature = x.size()
+        sub_dim = in_feature // self.head_num
+        return x.reshape(batch_size, seq_len, seq_len, self.head_num, sub_dim) \
+            .permute(0, 3, 1, 2, 4) \
+            .reshape(batch_size * self.head_num, seq_len, seq_len, sub_dim)
+
+
+class MultiHeadSelfCrossAttentionWithNodeAndEdge(MultiHeadSelfCrossAttention):
+
+    def __init__(self,
+                 in_features,
+                 head_num,
+                 output_dim,
+                 bias=True,
+                 activation=F.relu):
+        """Multi-head attention.
+
+        :param in_features: Size of each input sample.
+        :param head_num: Number of heads.
+        :param bias: Whether to use the bias term.
+        :param activation: The activation after each linear transformation.
+        """
+        super(MultiHeadSelfCrossAttentionWithNodeAndEdge, self).__init__(
+            in_features=in_features,
+            head_num=head_num,
+            output_dim=output_dim,
+            bias=bias,
+            activation=activation)
+
+        self.linear_qs = nn.Linear(in_features, in_features // 2, bias)
+        self.linear_ks = nn.Linear(in_features * 2, in_features // 2, bias)
+        self.linear_vs = nn.Linear(in_features, in_features // 2, bias)
+
+        self.linear_qc = nn.Linear(in_features, in_features // 2, bias)
+        self.linear_kc = nn.Linear(in_features * 2, in_features // 2, bias)
+        self.linear_vc = nn.Linear(in_features, in_features // 2, bias)
+
+    def forward(self, f1, f2, edges, edgec, masks=None, maskc=None):
+
+        nodes = torch.unsqueeze(f1, dim=-3).repeat(1, f1.shape[-2], 1, 1)
+        nodec = torch.unsqueeze(f2, dim=-3).repeat(1, f2.shape[-2], 1, 1)
+
+        assert nodes.shape == edges.shape
+
+        edges_and_nodes = torch.cat([edges, nodes], dim=-1)
+        edgec_and_nodec = torch.cat([edgec, nodec], dim=-1)
+
+        qs, ks, vs = self.linear_qs(f1), self.linear_ks(edges_and_nodes), self.linear_vs(f1)
+        qc, kc, vc = self.linear_qc(f1), self.linear_kc(edgec_and_nodec), self.linear_vc(f2)
 
         if self.activation is not None:
             qs = self.activation(qs)

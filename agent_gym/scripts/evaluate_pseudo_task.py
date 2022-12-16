@@ -84,15 +84,17 @@ if __name__ == "__main__":
 
     ################## evaluate many episodes and get average
 
-    use_baseline = "random_sample"
+    use_baseline = "min_cost_sample"
 
-    loop = 10000
+    loop = 1000
     succ_num = 0
     early_finish_num = 0
     step_early_finish = []
     step_succ = []
     acc_cost = []
     ave_cost = []
+    global_acc_cost = []
+    global_ave_cost = []
     acc_r = []
     ave_r = []
     task_num = []
@@ -101,7 +103,7 @@ if __name__ == "__main__":
     robot2_task_num = []
     wrong_allocation_rate = []
     time0 = time.time()
-    for k in range(loop):
+    for l in range(loop):
         count_while = 0
         obs = env.reset()
         done = False
@@ -110,6 +112,8 @@ if __name__ == "__main__":
             if use_baseline is None:
                 action = policy.predict(obs, deterministic=True)[0]
             elif use_baseline == "random_sample":
+                action = env.sample_action()
+            elif use_baseline == "min_cost_sample":
                 action = env.sample_action()
             obss, rewards, dones, infos = env.step(action)
             obs = obss
@@ -123,6 +127,8 @@ if __name__ == "__main__":
         robot1_task_num.append(info["5_robot_info/robot1_task"])
         robot2_task_num.append(info["5_robot_info/robot2_task"])
         wrong_allocation_rate.append(info["5_robot_info/robot1_wrong_allocation"] / info["1_num_steps"])
+        global_acc_cost.append(info["2_cost/accumulated_cost"])
+        global_ave_cost.append(info["2_cost/average_cost"])
         s = info["6_global_success"]
         if s:
             succ_num += 1
@@ -134,7 +140,7 @@ if __name__ == "__main__":
             step_early_finish.append(info["1_num_steps"])
             early_finish_task_num.append(info["4_succ_task_num/task_num"])
 
-        if k % (loop // 10) == 0:
+        if l % (loop // 10) == 0:
             print(time.time() - time0)
 
     eva_data = {}
@@ -144,17 +150,19 @@ if __name__ == "__main__":
         eva_data["policy_name"] = name
     else:
         eva_data["policy_name"] = use_baseline
-
+    eva_data["loop_num"] = loop
     eva_data["succ_rate"] = succ_num / loop
     eva_data["early_finish_rate"] = early_finish_num / loop
     eva_data["ave_succ_step"] = sum(step_succ) / succ_num
-    eva_data["ave_early_finish_step"] = sum(step_early_finish) / early_finish_num
+    eva_data["ave_early_finish_step"] = sum(step_early_finish) / early_finish_num if early_finish_num > 0 else 0
     eva_data["ave_succ_acc_cost"] = sum(acc_cost) / succ_num
     eva_data["ave_succ_ave_cost"] = sum(ave_cost) / succ_num
+    eva_data["ave_global_acc_cost"] = sum(global_acc_cost) / loop
+    eva_data["ave_global_ave_cost"] = sum(global_ave_cost) / loop
     eva_data["ave_acc_reward"] = sum(acc_r) / loop
     eva_data["ave_ave_reward"] = sum(ave_r) / loop
     eva_data["ave_task_done"] = sum(task_num) / loop
-    eva_data["ave_early_finish_task_done"] = sum(early_finish_task_num) / early_finish_num
+    eva_data["ave_early_finish_task_done"] = sum(early_finish_task_num) / early_finish_num if early_finish_num > 0 else 0
     eva_data["ave_r1_task_done"] = sum(robot1_task_num) / loop
     eva_data["ave_r2_task_done"] = sum(robot2_task_num) / loop
     eva_data["ave_wrong_allocation_rate"] = sum(wrong_allocation_rate) / loop

@@ -131,19 +131,23 @@ class CustomSubprocVecEnv(VecEnv):
         return np.stack(acts)
 
     def load_prediction_model(self, model, input_type=None, output_type=None, use_prediction_model = True):
-        self.prediction_model = model
-        assert input_type == self.prediction_model.obs_type
-        assert output_type == self.prediction_model.cost_type
 
-        input_features, cost_features, mask_features = self.prediction_model.get_input_and_output()
-
-        self.input_shape = len(input_features)
-        self.cost_shape = len(cost_features)
-        self.mask_shape = len(mask_features)
-
-        self.prediction_model_loaded = True
         self.use_prediction_model = use_prediction_model
+        if use_prediction_model:
+            self.prediction_model_loaded = True
+            self.prediction_model = model
+            assert input_type == self.prediction_model.obs_type
+            assert output_type == self.prediction_model.cost_type
+
+            input_features, cost_features, mask_features = self.prediction_model.get_input_and_output()
+
+            self.input_shape = len(input_features)
+            self.cost_shape = len(cost_features)
+            self.mask_shape = len(mask_features)
+
+
         return self.prediction_model_loaded
+
 
     def predict_cost_and_mask(self, obs):
         assert self.prediction_model_loaded
@@ -170,8 +174,20 @@ class CustomSubprocVecEnv(VecEnv):
         # print("pred_mask.shape", pred_mask.shape)
 
         obs["coop_edge_mask"] = np.multiply(pred_mask, unpred_mask)
+        # print("before",obs["coop_edge_mask"])
+        mask_terminate = obs["coop_edge_mask"][:,:-1,:-1].sum(axis = -2).sum(axis = -1)
+        # print("mask_termination",mask_terminate)
+        mask_terminate = mask_terminate < 1
+        # print("mask_termination", mask_terminate)
+
+        obs["coop_edge_mask"][:,-1,-1] = mask_terminate
+        # print("after",obs["coop_edge_mask"])
+
+
         obs["coop_edge_cost"] = np.multiply(pred_cost, obs["coop_edge_mask"]) + np.multiply(unpred_cost,
                                                                                             1 - obs["coop_edge_mask"])
+
+        obs["coop_edge_cost"] = obs["coop_edge_cost"] / 1000
 
         return obs
 

@@ -69,10 +69,12 @@ if __name__ == "__main__":
     task_allocator_obs_type = task_config["task_allocator_obs_type"]
     task_allocator_action_type = task_config["task_allocator_action_type"]
 
-    # #### load env
+    use_prediction_model = task_config["use_prediction_model"]
+
+    # # #### load env
     # num_cpu = 1
 
-    # env = CustomSubprocVecEnv([make_env(task_config, renders=False) for i in range(num_cpu)])
+    # env = CustomSubprocVecEnv([make_env(task_config, renders=True) for i in range(num_cpu)])
     # #### define input output type to use
     # cost_type = "coord_steps"  # "coord_steps"
     # obs_type = "norm_ee_only"
@@ -82,7 +84,11 @@ if __name__ == "__main__":
 
     # print("!!!!!!!!!!!!!!!!!!!!!!!!!1")
     # #### load prediction model
-    # prediction_model = Prediction_Model(obs_type=obs_type, cost_type=cost_type, cost_model_path=cost_model_path, mask_model_path=mask_model_path)
+    # prediction_model = (
+    #     Prediction_Model(obs_type=obs_type, cost_type=cost_type, cost_model_path=cost_model_path, mask_model_path=mask_model_path)
+    #     if use_prediction_model
+    #     else None
+    # )
     # # input_features, cost_features, mask_features = prediction_model.get_input_and_output()
     # #
     # # input_shape = len(input_features)
@@ -255,17 +261,46 @@ if __name__ == "__main__":
 
     ######################### test plot
     task_config["use_prediction_model"] = False
+    from gym_envs.baselines_pseudo_env_tasks import baselines_offline_heuristics, baseline_offline_brute_force, baseline_online_MCTS
 
     env = Env_tasks(
         task_config,
-        renders=True,
+        renders=False,
         task_allocator_reward_type=task_allocator_reward_type,
         task_allocator_obs_type=task_allocator_obs_type,
         task_allocator_action_type=task_allocator_action_type,
     )
     obs = env.reset()
-    for k in range(20):
-        a = env.sample_action()
-        o, r, d, info = env.step(a)
-        if d:
-            break
+    c, m, p = env.get_data_for_offline_planning()
+    print("\n##############\n")
+    print("offline heuristic")
+    baselines_offline_heuristics(c, m, p)
+
+    print("\n##############\n")
+
+    # c_s2n = c["n2n"][-1, :-1, -1, :-1]
+    # c = c_s2n + c["n"]
+    # obs_c = obs["coop_edge_cost"][:-1, :-1]
+    # check = obs_c - c
+
+    done = False
+    time00 = time.time()
+    while not done:
+        action = env.sample_action()
+        o, r, done, info = env.step(action)
+    online_planner_cost = info["2_cost/accumulated_cost"]
+    print("\n")
+    print("online planner")
+    print("cost:\t", online_planner_cost)
+    print("time used:\t", time.time() - time00)
+
+    print("\n##############\n")
+    print("offline brute force")
+    baseline_offline_brute_force(c, m, p)
+
+    print("\n##############\n")
+    print("online MCTS")
+    baseline_online_MCTS(c, m, p)
+
+    # print(c)
+    # print(m)

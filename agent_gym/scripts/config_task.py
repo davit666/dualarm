@@ -1,26 +1,27 @@
 import time
 
+
 class TaskConfig:
     env_name = "pseudo_task"
 
     load_model = False
     load_model_path = 'test_models/' + env_name
-    load_model_path  += '/1214/quick_test_no_prediction/robot_done_terminate_10M_SCAttEdge/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_MultiDiscrete_2022-12-14-16-15-06/quick_test_no_prediction'
-    load_model_path += "/robot_done_terminate_10M_at_the_end"
+    load_model_path += '/1228/share_para_low_depth_12parts_20M_mask_termination_norm_cost/RT_NP_CM_MT/SCAttNE4_2_layer_128_cat_coop_edge/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2022-12-28-22-26-04'
+    load_model_path += "/model_at_the_end"  # "/model_at_step_18999696"  #
     ######## model ########
     use_custom_network = True
 
     model_date = env_name + "/monitoring/" + time.strftime("%m%d")
-    custom_network_type = "SCAttNE"#"custom_self_cross_attention_edge"#"custom_flatten_all"#"custom_flatten_node"#
-    model_name = "quick_test_5M_fix_rest_pose" \
-                 + "/RNT_P_CM"
+    custom_network_type = "EdgeAttentionWithNodeEncoding_64"  # "SCAttNE_3_layer_cat_coop_edge"#"custom_self_cross_attention_edge"#"custom_flatten_all"#"custom_flatten_node"#
+    model_name = "share_para_high_att_depth_12parts_20M_mask_termination_norm_cost" \
+                 + "/RT_NP_CM_MT"
 
     alg_name = "PPO"
     task_allocator_reward_type = "negative_normalized_cost_with_sparse_success_bonus"
     task_allocator_obs_type = "common_dict_obs"
-    task_allocator_action_type = "Discrete" #"MultiDiscrete"
+    task_allocator_action_type = "Discrete"  # "MultiDiscrete"
 
-    use_prediction_model = True
+    use_prediction_model = False
 
     ####### prediction model ########
     #### define input output type to use
@@ -31,10 +32,9 @@ class TaskConfig:
     mask_model_path = "../../generated_datas/good_models/mask/1203/1024_with_failure_task_datas_100_epochs/norm_ee_only_predict_succ/256-256-256_ce_adam_rl1e-3_batch_512/2022-12-02-11-47-26/model_saved/2022-12-02-12-29-48.pth"
 
     ######## env config ########
-    part_num = 6
-    robot_done_freeze = False
+    part_num = 10
+    robot_done_freeze = True
     default_rest_pose = True
-
 
     task_type = "random"
     dynamic_task = False
@@ -53,23 +53,23 @@ class TaskConfig:
     beltBaseOrn = [0, 0, 0, 1]
     beltBaseColor = [0.75, 0.75, 0.75, 1]
 
-
     ######## save & log ########
     log_path = "../../log_datas/"
     save_path = "../models_saved/"
-    model_save_freq = 1e6
+    model_save_freq = 5e5
 
     ######## cpu ########
     num_cpu = 24
     ######## lr scheduler ########
-    use_lr_scheduler = False
+    use_lr_scheduler = True
     ######## parameter ########
-    learning_rate = 1e-3
+    learning_rate = 3e-4
     n_steps = 2048
-    batch_size = 2048
+    batch_size = 512
     n_epochs = 10
 
-    total_timesteps = 5e6
+    total_timesteps = 2e7
+
 
 def load_config():
     ######## train config ########
@@ -131,6 +131,3 @@ def load_config():
     task_config['beltBaseColor'] = T.beltBaseColor
 
     return task_config
-
-
-

@@ -39,7 +39,7 @@ class Env_tasks(gym.GoalEnv):
                  # motion_planner_reward_type="delta_dist_with_sparse_reward",
                  # motion_planner_obs_type="common_obs",
                  # motion_planner_action_type="ee",
-                 parts_num=6,
+                 # parts_num=6,
                  maxSteps=50):
 
         self._urdfRoot = urdfRoot
@@ -47,7 +47,7 @@ class Env_tasks(gym.GoalEnv):
 
         self._renders = renders
         self._maxSteps = maxSteps
-        self.parts_num = parts_num
+        self.parts_num = env_config['part_num']
 
         self.action_type = task_allocator_action_type
         self.task_allocator_reward_type = task_allocator_reward_type
@@ -73,7 +73,7 @@ class Env_tasks(gym.GoalEnv):
         self._beltBaseOrn = env_config['beltBaseOrn']
         self._beltBaseColor = env_config['beltBaseColor']
 
-        self.max_cost_const = env_config['max_cost_const'] if env_config['use_prediction_model'] else 2
+        self.max_cost_const = env_config['max_cost_const'] if env_config['use_prediction_model'] else 1
         self.global_success_bonus = env_config['global_success_bonus']
         self.reward_scale = env_config['reward_scale']
 
@@ -84,7 +84,7 @@ class Env_tasks(gym.GoalEnv):
         self.use_prediction_model = env_config['use_prediction_model']
         self.default_rest_pose = env_config['default_rest_pose']
         self.hard_mask = False
-
+        self.mask_termination = True
         ######### define gym conditions
 
         # pass
@@ -155,7 +155,7 @@ class Env_tasks(gym.GoalEnv):
             self.plot = PseudoPlot(img_width=128, img_height=128, dpi=64)
 
             self.plot.setup(self.global_workspace, self.robots, self.parts)
-            self.plot.fig.show()
+            self.plot.imshow()
 
         self.reset()
 
@@ -182,7 +182,7 @@ class Env_tasks(gym.GoalEnv):
         # self.accumulated_reward_dict['task'] = 0
         self.prediction_updated = False
 
-       ############################################################################
+        ############################################################################
         self.reset_robots()
         self.reset_parts()
 
@@ -196,13 +196,14 @@ class Env_tasks(gym.GoalEnv):
             # time.sleep(1)
             assert self.plot is not None
             self.plot.update_plot(self.robots, self.parts)
-            self.plot.fig.show()
+            self.plot.save()
 
         return obs
+
     def reset_robots(self):
         ######## robot reset#############
         for robot in self.robots:
-            robot.reset(default_goal_pose = self.default_rest_pose)
+            robot.reset(default_goal_pose=self.default_rest_pose)
             robot.tasks_done = 0
             robot.wrong_allocation = 0
             robot.freeze_step = 0
@@ -212,13 +213,19 @@ class Env_tasks(gym.GoalEnv):
 
     def reset_parts(self):
         ######## parts reset
-        goal_poses_base = [[-0.7, -0.5], [-0.7, 0], [-0.7, 0.5], [0.7, -0.5], [0.7, 0], [0.7, 0.5]]
-        init_poses_base = [[-0.25, -0.5], [-0.25, 0], [-0.25, 0.5], [0.25, -0.5], [0.25, 0], [0.25, 0.5]]
+        # goal_poses_base = [[-0.7, -0.5], [-0.7, 0], [-0.7, 0.5], [0.7, -0.5], [0.7, 0], [0.7, 0.5]]
+        # init_poses_base = [[-0.25, -0.5], [-0.25, 0], [-0.25, 0.5], [0.25, -0.5], [0.25, 0], [0.25, 0.5]]
 
-        # global_poses_base = goal_poses_base + init_poses_base
-        # random.shuffle(global_poses_base)
-        # init_poses_base = global_poses_base[:self.parts_num]
-        # goal_poses_base = global_poses_base[self.parts_num:]
+        goal_poses_base = []
+        init_poses_base = []
+        x_axis = np.linspace(-0.7, 0.7, 15)
+        y_axis = np.linspace(-0.5, 0.5, 11)
+        for x in x_axis:
+            for y in y_axis:
+                if abs(x) <= 0.35:
+                    init_poses_base.append([x, y])
+                else:
+                    goal_poses_base.append([x, y])
 
         random.shuffle(goal_poses_base)
         random.shuffle(init_poses_base)
@@ -432,9 +439,21 @@ class Env_tasks(gym.GoalEnv):
                         coop_edge_mask[m, n] = 0
 
                 if not self.use_prediction_model and coop_edge_mask[m, n]:
-                    dist1 = robots_nodes[0][m][8] + robots_nodes[0][m][18]
-                    dist2 = robots_nodes[1][n][8] + robots_nodes[1][n][18]
-                    coop_edge_cost[m, n] = max(dist1, dist2)
+                    dist1 = max(robots_nodes[0][m][8], robots_nodes[1][n][8])
+                    dist2 = max(robots_nodes[0][m][18], robots_nodes[1][n][18])
+                    coop_edge_cost[m, n] = (dist1 + dist2) / 2
+
+                    # dist1 = (robots_nodes[0][m][8] + robots_nodes[0][m][18]) / 2
+                    # dist2 = (robots_nodes[1][n][8] + robots_nodes[1][n][18]) / 2
+                    # coop_edge_cost[m, n] = max(dist1, dist2)
+
+        if self.mask_termination:
+            for m in range(self.parts_num + 1):
+                for n in range(self.parts_num + 1):
+                    if m == self.parts_num or n == self.parts_num:
+                        coop_edge_mask[m, n] = 0
+            if coop_edge_mask[:-1, :-1].sum() < 1:
+                coop_edge_mask[-1, -1] = 1
 
         self.state_info["robots_nodes"] = robots_nodes
         self.state_info['robots_task_edge_xyz'] = robots_task_edge_xyz
@@ -510,11 +529,17 @@ class Env_tasks(gym.GoalEnv):
     def step(self, allocator_action):
         self.env_step_counter += 1
 
+        # change to termination actin if no available action
+        if self.state_info["coop_edge_mask"].sum() < 1:
+            allocator_action = (self.parts_num + 1) ** self.robots_num - 1
+
         # change action into multi discrete type
         allocator_action = self.extract_allocator_action(allocator_action)
 
         # apply_action
         cost, check = self.apply_action(allocator_action)
+        print("action:\t", allocator_action)
+        print("cost:\t",cost)
         self.accumulated_cost += cost
         # get new observation without cost_updated
         observation = self._observation()
@@ -525,14 +550,12 @@ class Env_tasks(gym.GoalEnv):
         # check termination
         done = self._termination()
 
-
         ## update plot
         if self._renders:
             # time.sleep(1)
             assert self.plot is not None
             self.plot.update_plot(self.robots, self.parts)
-            self.plot.fig.show()
-
+            self.plot.save()
 
         if done:
             episode_info = {}
@@ -594,7 +617,9 @@ class Env_tasks(gym.GoalEnv):
         coop_mask = self.state_info['coop_edge_mask'][allocator_action[0], allocator_action[1]]
         coop_cost = self.state_info['coop_edge_cost'][allocator_action[0], allocator_action[1]]
 
-        if any(self.state_info['robots_task_edge_mask'][i][allocator_action[i]] == 0 for i in range(self.robots_num)):
+        if allocator_action[0] == self.parts_num and allocator_action[1] == self.parts_num:
+            coop_mask = 1
+        elif any(self.state_info['robots_task_edge_mask'][i][allocator_action[i]] == 0 for i in range(self.robots_num)):
             coop_mask = 0
         elif self.robot_done_freeze:
             for i, robot in enumerate(self.robots):
@@ -656,17 +681,20 @@ class Env_tasks(gym.GoalEnv):
         return cost, check
 
     def _reward(self, cost, check):
-        reward = - cost / self.max_cost_const
-        reward += check * 1
+        reward = - cost  # / (self.max_cost_const * 2)
+
+        reward += 1  # (check-1)
+
+        reward *= 1
+
         if all([robot.is_done for robot in self.robots]):
+            reward += self.accumulated_reward
             if all([part.is_success for part in self.parts]):
-                reward += self.global_success_bonus
+                # reward += self.global_success_bonus
+                # reward += self.accumulated_reward
+                pass
             else:
-                if self.robot_done_freeze:
-                    # give punishment for task unfinished in success_freeze pattern
-                    reward -= self.global_success_bonus
-                else:
-                    reward = - self.max_cost_const / self.max_cost_const
+                reward -= self.global_success_bonus
                 # reward -= sum([not part.is_success for part in self.parts])
         return reward
 
@@ -734,9 +762,9 @@ class Env_tasks(gym.GoalEnv):
                 if sum(mask0) >= 1:
                     prob = mask0 / sum(mask0)
                     act = np.random.choice(action_list, p=prob)
-                elif sum(mask) >= 1:
-                    prob = mask / sum(mask)
-                    act = np.random.choice(action_list, p=prob)
+                # elif sum(mask) >= 1:
+                #     prob = mask / sum(mask)
+                #     act = np.random.choice(action_list, p=prob)
                 else:
                     act = (self.parts_num + 1) ** self.robots_num - 1
                 action.append(act)
@@ -760,11 +788,11 @@ class Env_tasks(gym.GoalEnv):
                     cost = cost * mask0 + self.max_cost_const * (1 - mask0) * 10
                     act = np.argmin(cost)
                     assert mask0[act]
-                elif sum(mask) >= 1:
-                    # print("in B")
-                    cost = cost * mask + self.max_cost_const * (1 - mask) * 10
-                    act = np.argmin(cost)
-                    assert mask[act]
+                # elif sum(mask) >= 1:
+                #     # print("in B")
+                #     cost = cost * mask + self.max_cost_const * (1 - mask) * 10
+                #     act = np.argmin(cost)
+                #     assert mask[act]
                 else:
                     # print("in C")
                     act = (self.parts_num + 1) ** self.robots_num - 1
@@ -781,6 +809,260 @@ class Env_tasks(gym.GoalEnv):
 
         else:
             return None
+
+    def enviroment_change(self):
+        # randomly change done/undone for a part or switch two parts curr_pose/goal_pose with a probability
+
+        return True
+
+    def get_data_for_offline_planning(self):
+
+        ### get robot data
+        robots_ee = []
+        robots_goal = []
+        robots_mask = []
+        for i, robot in enumerate(self.robots):
+            robot_ee = robot.getObservation_EE()
+            robot_goal = robot.goal_pose
+            robot_done = robot.is_done
+
+            # normalize
+            norm_robot_ee = self.normalize_cartesian_pose(robot_ee)
+            norm_robot_goal = self.normalize_cartesian_pose(robot_goal)
+
+            robots_ee.append(norm_robot_ee)
+            robots_goal.append(norm_robot_goal)
+            robots_mask.append(1 - robot_done)
+
+        ### get part data
+        parts_init = []
+        parts_goal = []
+        parts_mask = []
+        for j, part in enumerate(self.parts):
+            part_init = part.getPose()
+            part_goal = part.getGoalPose()
+            part_done = part.is_success
+
+            # part_init[2] += (np.random.random() - 0.5) / 50
+            part_goal[2] += (np.random.random() - 0.5) / 50
+
+            # normalize
+            norm_part_init = self.normalize_cartesian_pose(part_init)
+            norm_part_goal = self.normalize_cartesian_pose(part_goal)
+
+            parts_init.append(norm_part_init)
+            parts_goal.append(norm_part_goal)
+            parts_mask.append(1 - part_done)
+
+        cost_data = {}
+        mask_data = {}
+
+        # cost_start2node = np.zeros((self.parts_num, self.parts_num))
+        # mask_start2node = np.ones((self.parts_num, self.parts_num))
+        # cost_node2end = np.zeros((self.parts_num, self.parts_num))
+        # mask_node2end = np.ones((self.parts_num, self.parts_num))
+
+        cost_node = np.ones((self.parts_num, self.parts_num)) * self.max_cost_const
+        mask_node = np.zeros((self.parts_num, self.parts_num))
+        cost_node2node = np.ones((self.parts_num + 1, self.parts_num + 1, self.parts_num + 1, self.parts_num + 1)) * self.max_cost_const
+        mask_node2node = np.zeros((self.parts_num + 1, self.parts_num + 1, self.parts_num + 1, self.parts_num + 1))
+
+        if not self.use_prediction_model:
+            # for start 2 node
+            for j1 in range(self.parts_num):
+                for j2 in range(self.parts_num):
+                    init_ee1 = robots_ee[0]
+                    goal_ee1 = parts_init[j1]
+                    dist_xyz1 = np.linalg.norm(init_ee1[:3] - goal_ee1[:3])
+                    # dist_rz1 = np.linalg.norm(init_ee1[3:] - goal_ee1[3:])
+                    # obs1 = np.concatenate([init_ee1, goal_ee1, [dist_xyz1], [dist_rz1]])
+
+                    init_ee2 = robots_ee[1]
+                    goal_ee2 = parts_init[j2]
+                    dist_xyz2 = np.linalg.norm(init_ee2[:3] - goal_ee2[:3])
+                    # dist_rz2 = np.linalg.norm(init_ee2[3:] - goal_ee2[3:])
+                    # obs2 = np.concatenate([init_ee2, goal_ee2, [dist_xyz2], [dist_rz2]])
+
+                    if j1 == j2:
+                        mask_node2node[self.parts_num, j1, self.parts_num, j2] = 0
+                        cost_node2node[self.parts_num, j1, self.parts_num, j2] = self.max_cost_const
+                    else:
+                        mask_node2node[self.parts_num, j1, self.parts_num, j2] = 1
+                        cost_node2node[self.parts_num, j1, self.parts_num, j2] = max(dist_xyz1, dist_xyz2)
+            # for node transfer
+            for j1 in range(self.parts_num):
+                for j2 in range(self.parts_num):
+                    init_ee1 = parts_init[j1]
+                    goal_ee1 = parts_goal[j1]
+                    dist_xyz1 = np.linalg.norm(init_ee1[:3] - goal_ee1[:3])
+                    # dist_rz1 = np.linalg.norm(init_ee1[3:] - goal_ee1[3:])
+                    # obs1 = np.concatenate([init_ee1, goal_ee1, [dist_xyz1], [dist_rz1]])
+
+                    init_ee2 = parts_init[j2]
+                    goal_ee2 = parts_goal[j2]
+                    dist_xyz2 = np.linalg.norm(init_ee2[:3] - goal_ee2[:3])
+                    # dist_rz2 = np.linalg.norm(init_ee2[3:] - goal_ee2[3:])
+                    # obs2 = np.concatenate([init_ee2, goal_ee2, [dist_xyz2], [dist_rz2]])
+
+                    if j1 == j2:
+                        mask_node[j1, j2] = 0
+                        cost_node[j1, j2] = self.max_cost_const
+                    else:
+                        mask_node[j1, j2] = 1
+                        cost_node[j1, j2] = max(dist_xyz1, dist_xyz2)
+            # for node 2 node transfer
+            for j1_init in range(self.parts_num):
+                for j1_goal in range(self.parts_num):
+                    for j2_init in range(self.parts_num):
+                        for j2_goal in range(self.parts_num):
+                            init_ee1 = parts_goal[j1_init]
+                            goal_ee1 = parts_init[j1_goal]
+                            dist_xyz1 = np.linalg.norm(init_ee1[:3] - goal_ee1[:3])
+                            # dist_rz1 = np.linalg.norm(init_ee1[3:] - goal_ee1[3:])
+                            # obs1 = np.concatenate([init_ee1, goal_ee1, [dist_xyz1], [dist_rz1]])
+
+                            init_ee2 = parts_goal[j2_init]
+                            goal_ee2 = parts_init[j2_goal]
+                            dist_xyz2 = np.linalg.norm(init_ee2[:3] - goal_ee2[:3])
+                            # dist_rz2 = np.linalg.norm(init_ee2[3:] - goal_ee2[3:])
+                            # obs2 = np.concatenate([init_ee2, goal_ee2, [dist_xyz2], [dist_rz2]])
+                            if j1_init == j1_goal:
+                                mask_node2node[j1_init, j1_goal, j2_init, j2_goal] = 0
+                                cost_node2node[j1_init, j1_goal, j2_init, j2_goal] = self.max_cost_const
+                            elif j2_init == j2_goal:
+                                mask_node2node[j1_init, j1_goal, j2_init, j2_goal] = 0
+                                cost_node2node[j1_init, j1_goal, j2_init, j2_goal] = self.max_cost_const
+                            elif j1_init == j2_init:
+                                mask_node2node[j1_init, j1_goal, j2_init, j2_goal] = 0
+                                cost_node2node[j1_init, j1_goal, j2_init, j2_goal] = self.max_cost_const
+                            elif j1_goal == j2_goal:
+                                mask_node2node[j1_init, j1_goal, j2_init, j2_goal] = 0
+                                cost_node2node[j1_init, j1_goal, j2_init, j2_goal] = self.max_cost_const
+                            else:
+                                mask_node2node[j1_init, j1_goal, j2_init, j2_goal] = 1
+                                cost_node2node[j1_init, j1_goal, j2_init, j2_goal] = max(dist_xyz1, dist_xyz2)
+            # for node 2 end
+            for j1 in range(self.parts_num):
+                for j2 in range(self.parts_num):
+                    init_ee1 = parts_goal[j1]
+                    goal_ee1 = robots_goal[0]
+                    dist_xyz1 = np.linalg.norm(init_ee1[:3] - goal_ee1[:3])
+                    # dist_rz1 = np.linalg.norm(init_ee1[3:] - goal_ee1[3:])
+                    # obs1 = np.concatenate([init_ee1, goal_ee1, [dist_xyz1], [dist_rz1]])
+
+                    init_ee2 = parts_goal[j2]
+                    goal_ee2 = robots_goal[1]
+                    dist_xyz2 = np.linalg.norm(init_ee2[:3] - goal_ee2[:3])
+                    # dist_rz2 = np.linalg.norm(init_ee2[3:] - goal_ee2[3:])
+                    # obs2 = np.concatenate([init_ee2, goal_ee2, [dist_xyz2], [dist_rz2]])
+
+                    if j1 == j2:
+                        mask_node2node[j1, self.parts_num, j2, self.parts_num] = 0
+                        cost_node2node[j1, self.parts_num, j2, self.parts_num] = self.max_cost_const
+                    else:
+                        mask_node2node[j1, self.parts_num, j2, self.parts_num] = 1
+                        cost_node2node[j1, self.parts_num, j2, self.parts_num] = max(dist_xyz1, dist_xyz2)
+
+            mask_node2node[self.parts_num, self.parts_num, self.parts_num, self.parts_num] = 0
+            cost_node2node[self.parts_num, self.parts_num, self.parts_num, self.parts_num] = self.max_cost_const
+
+            cost_node2node  = cost_node2node / 2.
+            cost_node = cost_node / 2.
+
+        else:
+            # for start 2 node
+            for j1 in range(self.parts_num):
+                for j2 in range(self.parts_num):
+                    init_ee1 = robots_ee[0]
+                    goal_ee1 = parts_init[j1]
+                    dist_xyz1 = np.linalg.norm(init_ee1[:3] - goal_ee1[:3])
+                    dist_rz1 = np.linalg.norm(init_ee1[3:] - goal_ee1[3:])
+                    obs1 = np.concatenate([init_ee1, goal_ee1, [dist_xyz1], [dist_rz1]])
+
+                    init_ee2 = robots_ee[1]
+                    goal_ee2 = parts_init[j2]
+                    dist_xyz2 = np.linalg.norm(init_ee2[:3] - goal_ee2[:3])
+                    dist_rz2 = np.linalg.norm(init_ee2[3:] - goal_ee2[3:])
+                    obs2 = np.concatenate([init_ee2, goal_ee2, [dist_xyz2], [dist_rz2]])
+
+                    cost_node2node[self.parts_num, j1, self.parts_num, j2] = np.concatenate([obs1, obs2])
+            # for node transfer
+            for j1 in range(self.parts_num):
+                for j2 in range(self.parts_num):
+                    init_ee1 = parts_init[j1]
+                    goal_ee1 = parts_goal[j1]
+                    dist_xyz1 = np.linalg.norm(init_ee1[:3] - goal_ee1[:3])
+                    dist_rz1 = np.linalg.norm(init_ee1[3:] - goal_ee1[3:])
+                    obs1 = np.concatenate([init_ee1, goal_ee1, [dist_xyz1], [dist_rz1]])
+
+                    init_ee2 = parts_init[j2]
+                    goal_ee2 = parts_goal[j2]
+                    dist_xyz2 = np.linalg.norm(init_ee2[:3] - goal_ee2[:3])
+                    dist_rz2 = np.linalg.norm(init_ee2[3:] - goal_ee2[3:])
+                    obs2 = np.concatenate([init_ee2, goal_ee2, [dist_xyz2], [dist_rz2]])
+
+                    cost_node[j1, j2] = np.concatenate([obs1, obs2])
+            # for node 2 node transfer
+            for j1_init in range(self.parts_num):
+                for j1_goal in range(self.parts_num):
+                    for j2_init in range(self.parts_num):
+                        for j2_goal in range(self.parts_num):
+                            init_ee1 = parts_goal[j1_init]
+                            goal_ee1 = parts_init[j1_goal]
+                            dist_xyz1 = np.linalg.norm(init_ee1[:3] - goal_ee1[:3])
+                            dist_rz1 = np.linalg.norm(init_ee1[3:] - goal_ee1[3:])
+                            obs1 = np.concatenate([init_ee1, goal_ee1, [dist_xyz1], [dist_rz1]])
+
+                            init_ee2 = parts_goal[j2_init]
+                            goal_ee2 = parts_init[j2_goal]
+                            dist_xyz2 = np.linalg.norm(init_ee2[:3] - goal_ee2[:3])
+                            dist_rz2 = np.linalg.norm(init_ee2[3:] - goal_ee2[3:])
+                            obs2 = np.concatenate([init_ee2, goal_ee2, [dist_xyz2], [dist_rz2]])
+
+                            cost_node2node[j1_init, j1_goal, j2_init, j2_goal] = np.concatenate([obs1, obs2])
+            # for node 2 end
+            for j1 in range(self.parts_num):
+                for j2 in range(self.parts_num):
+                    init_ee1 = parts_goal[j1]
+                    goal_ee1 = robots_goal[0]
+                    dist_xyz1 = np.linalg.norm(init_ee1[:3] - goal_ee1[:3])
+                    dist_rz1 = np.linalg.norm(init_ee1[3:] - goal_ee1[3:])
+                    obs1 = np.concatenate([init_ee1, goal_ee1, [dist_xyz1], [dist_rz1]])
+
+                    init_ee2 = parts_goal[j2]
+                    goal_ee2 = robots_goal[1]
+                    dist_xyz2 = np.linalg.norm(init_ee2[:3] - goal_ee2[:3])
+                    dist_rz2 = np.linalg.norm(init_ee2[3:] - goal_ee2[3:])
+                    obs2 = np.concatenate([init_ee2, goal_ee2, [dist_xyz2], [dist_rz2]])
+
+                    cost_node2node[j1, self.parts_num, j2, self.parts_num] = np.concatenate([obs1, obs2])
+
+            init_ee1 = robots_ee[0]
+            goal_ee1 = robots_goal[0]
+            dist_xyz1 = np.linalg.norm(init_ee1[:3] - goal_ee1[:3])
+            dist_rz1 = np.linalg.norm(init_ee1[3:] - goal_ee1[3:])
+            obs1 = np.concatenate([init_ee1, goal_ee1, [dist_xyz1], [dist_rz1]])
+
+            init_ee2 = robots_ee[1]
+            goal_ee2 = robots_goal[1]
+            dist_xyz2 = np.linalg.norm(init_ee2[:3] - goal_ee2[:3])
+            dist_rz2 = np.linalg.norm(init_ee2[3:] - goal_ee2[3:])
+            obs2 = np.concatenate([init_ee2, goal_ee2, [dist_xyz2], [dist_rz2]])
+
+            cost_node2node[self.parts_num, self.parts_num, self.parts_num, self.parts_num] = np.concatenate([obs1, obs2])
+
+        # cost_data['s2n'] = cost_start2node
+        cost_data['n'] = cost_node
+        cost_data['n2n'] = cost_node2node
+        # cost_data['n2e'] = cost_node2end
+
+        # mask_data['s2n'] = mask_start2node
+        mask_data['n'] = mask_node
+        mask_data['n2n'] = mask_node2node
+        # mask_data['n3s'] = mask_node2end
+
+        return cost_data, mask_data, parts_mask
+
     ####################################### task allocators ################################
     # def distance_based_allocator(self, obs=None):
     #     ######## allocate closest tasks to robots

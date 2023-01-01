@@ -70,7 +70,11 @@ if __name__ == "__main__":
     mask_model_path = task_config["mask_model_path"]
     use_prediction_model = task_config["use_prediction_model"]
     #### load prediction model
-    prediction_model = Prediction_Model(obs_type=obs_type, cost_type=cost_type, cost_model_path=cost_model_path, mask_model_path=mask_model_path)
+    prediction_model = (
+        Prediction_Model(obs_type=obs_type, cost_type=cost_type, cost_model_path=cost_model_path, mask_model_path=mask_model_path)
+        if use_prediction_model
+        else None
+    )
     print("prediction model loaded, input_type:{}, output_type:{}".format(obs_type, cost_type))
 
     ############ create custom subproc env and mount prediction model
@@ -79,14 +83,21 @@ if __name__ == "__main__":
     env = CustomSubprocVecEnv([make_env(task_config) for i in range(num_cpu)])
     env.load_prediction_model(prediction_model, input_type=obs_type, output_type=cost_type, use_prediction_model=use_prediction_model)
 
-    ########### load trained policy
-    policy = None  # PPO.load(load_model_path)
+    # if not use_prediction_model:
+    #     del prediction_model
 
+    ########### load trained policy
+    if load_model:
+        policy = PPO.load(load_model_path)
+        # policy.set_env(env)
+        policy.policy.observation_space = env.observation_space
+        policy.policy.action_space = env.action_space
+        policy.policy.mlp_extractor.mask_dim = task_config["part_num"] + 1
     ################## evaluate many episodes and get average
 
     use_baseline = "min_cost_sample"
 
-    loop = 1000
+    loop = 1
     succ_num = 0
     early_finish_num = 0
     step_early_finish = []
@@ -109,7 +120,7 @@ if __name__ == "__main__":
         done = False
         while not done:
             count_while += 1
-            if use_baseline is None:
+            if load_model:
                 action = policy.predict(obs, deterministic=True)[0]
             elif use_baseline == "random_sample":
                 action = env.sample_action()
@@ -140,8 +151,9 @@ if __name__ == "__main__":
             step_early_finish.append(info["1_num_steps"])
             early_finish_task_num.append(info["4_succ_task_num/task_num"])
 
-        if l % (loop // 10) == 0:
-            print(time.time() - time0)
+        # if l % (loop // 100) == 0:
+        #     print(l // (loop // 100), "\t", time.time() - time0)
+        #     print("cost:\t", sum(acc_cost) / succ_num)
 
     eva_data = {}
 
@@ -152,9 +164,9 @@ if __name__ == "__main__":
         eva_data["policy_name"] = use_baseline
     eva_data["loop_num"] = loop
     eva_data["succ_rate"] = succ_num / loop
-    eva_data["early_finish_rate"] = early_finish_num / loop
+    # eva_data["early_finish_rate"] = early_finish_num / loop
     eva_data["ave_succ_step"] = sum(step_succ) / succ_num
-    eva_data["ave_early_finish_step"] = sum(step_early_finish) / early_finish_num if early_finish_num > 0 else 0
+    # eva_data["ave_early_finish_step"] = sum(step_early_finish) / early_finish_num if early_finish_num > 0 else 0
     eva_data["ave_succ_acc_cost"] = sum(acc_cost) / succ_num
     eva_data["ave_succ_ave_cost"] = sum(ave_cost) / succ_num
     eva_data["ave_global_acc_cost"] = sum(global_acc_cost) / loop
@@ -162,7 +174,7 @@ if __name__ == "__main__":
     eva_data["ave_acc_reward"] = sum(acc_r) / loop
     eva_data["ave_ave_reward"] = sum(ave_r) / loop
     eva_data["ave_task_done"] = sum(task_num) / loop
-    eva_data["ave_early_finish_task_done"] = sum(early_finish_task_num) / early_finish_num if early_finish_num > 0 else 0
+    # eva_data["ave_early_finish_task_done"] = sum(early_finish_task_num) / early_finish_num if early_finish_num > 0 else 0
     eva_data["ave_r1_task_done"] = sum(robot1_task_num) / loop
     eva_data["ave_r2_task_done"] = sum(robot2_task_num) / loop
     eva_data["ave_wrong_allocation_rate"] = sum(wrong_allocation_rate) / loop

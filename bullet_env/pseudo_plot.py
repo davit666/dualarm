@@ -1,6 +1,6 @@
 import matplotlib
 import numpy as np
-# import cv2
+import cv2
 import matplotlib.pyplot as plt
 import matplotlib.tri as mtri
 import time
@@ -66,14 +66,14 @@ class PseudoPartPlot():
 
 
 class PseudoPlot():
-    def __init__(self, img_width=128, img_height=128, dpi=64):
+    def __init__(self, img_width=1024, img_height=1024, dpi=128):
         self.img_width = img_width
         self.img_height = img_height
         self.dpi = dpi
 
         fig_w = img_width // dpi
         fig_h = img_height // dpi
-        self.fig = plt.figure(figsize=(fig_w, fig_h), dpi=self.dpi)
+        self.fig = plt.figure(figsize=(8, 8), dpi=300)
         self.ax = self.fig.add_subplot(111)
 
         self.ax.set_xlim([-1.3, 1.3])
@@ -81,6 +81,8 @@ class PseudoPlot():
         self.ax.set_axis_off()
         self.ax.margins(0, 0)
         self.fig.subplots_adjust(top=1, bottom=0, right=1, left=0, hspace=0, wspace=0)
+        self.t_name = str(time.time())
+        self.dot_size = 10
 
     def setup(self, base, robots, parts):
         self.p_base = PseudoBasePlot(base)
@@ -102,10 +104,10 @@ class PseudoPlot():
             robot_base = robot.BasePos
 
             p_robot.update_data(robot_ee, rest_pose=robot_goal, base=robot_base)
-            p_robot.dot_base = self.ax.plot([p_robot.base[0]], [p_robot.base[1]], 'ro')
-            p_robot.dot_ee = self.ax.plot([p_robot.ee[0]], [p_robot.ee[1]], 'ro')
-            p_robot.dot_rest_pose = self.ax.plot([p_robot.rest_pose[0]], [p_robot.rest_pose[1]], 'g*')
-            p_robot.line_robot = self.ax.plot([p_robot.base[0], p_robot.ee[0]], [p_robot.base[1], p_robot.ee[1]], 'r-')
+            p_robot.dot_base = self.ax.plot([p_robot.base[0]], [p_robot.base[1]], 'ro',markersize=self.dot_size)
+            p_robot.dot_ee = self.ax.plot([p_robot.ee[0]], [p_robot.ee[1]], 'ro',markersize=self.dot_size)
+            p_robot.dot_rest_pose = self.ax.plot([p_robot.rest_pose[0]], [p_robot.rest_pose[1]], 'g*',markersize=self.dot_size)
+            p_robot.line_robot = self.ax.plot([p_robot.base[0], p_robot.ee[0]], [p_robot.base[1], p_robot.ee[1]], 'r-',markersize=self.dot_size)
 
             self.p_robots.append(p_robot)
         for j, part in enumerate(parts):
@@ -113,8 +115,8 @@ class PseudoPlot():
             part_init = part.getPose()
             part_goal = part.getGoalPose()
             p_part.update_data(part_init, goal=part_goal)
-            p_part.dot_pose = self.ax.plot([p_part.pose[0]], [p_part.pose[1]], 'bo')
-            p_part.dot_goal = self.ax.plot([p_part.goal[0]], [p_part.goal[1]], 'y*')
+            p_part.dot_pose = self.ax.plot([p_part.pose[0]], [p_part.pose[1]], 'bo',markersize=self.dot_size)
+            p_part.dot_goal = self.ax.plot([p_part.goal[0]], [p_part.goal[1]], 'y*',markersize=self.dot_size)
             p_part.line_path = self.ax.plot([p_part.pose[0], p_part.goal[0]], [p_part.pose[1], p_part.goal[1]], 'b--')
 
             self.p_parts.append(p_part)
@@ -153,5 +155,16 @@ class PseudoPlot():
             p_part.line_path[0].set_ydata([p_part.pose[1], p_part.goal[1]])
 
         self.fig.canvas.draw()
-    def imshow(self):
-        pass
+
+    def imshow(self,):
+        # img = np.array(self.fig.canvas.renderer._renderer)
+        # cv2.imshow("Pseudo Task Plot", img)
+        # cv2.waitKey(1)
+        return True
+
+    def save(self):
+        self.fig.savefig("savefig/fig_"+time.strftime("%Y-%m-%d-%H-%M-%S")+".png")
+        print("fig saved")
+        time.sleep(1)
+        return
+

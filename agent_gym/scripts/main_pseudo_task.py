@@ -71,9 +71,10 @@ if __name__ == '__main__':
     mask_model_path = task_config['mask_model_path']
 
     use_prediction_model = task_config['use_prediction_model']
+    load_model = task_config['load_model']
     #### load prediction model
     prediction_model = Prediction_Model(obs_type=obs_type, cost_type=cost_type, cost_model_path=cost_model_path,
-                                        mask_model_path=mask_model_path)
+                                        mask_model_path=mask_model_path) if use_prediction_model else None
     print("prediction model loaded, input_type:{}, output_type:{}".format(obs_type,cost_type))
 
 
@@ -82,6 +83,7 @@ if __name__ == '__main__':
     env = CustomSubprocVecEnv(
         [make_env(task_config) for i in range(num_cpu)])
     env.load_prediction_model(prediction_model, input_type=obs_type, output_type=cost_type,use_prediction_model=use_prediction_model)
+
 
     ########### define learning rate scheduler
     if task_config['use_lr_scheduler']:
@@ -93,9 +95,19 @@ if __name__ == '__main__':
 
 
     if alg_name == "PPO":
-        model = PPO(CustomActorCriticPolicy, env, learning_rate=lr_scheduler, verbose=0,
-                    tensorboard_log=task_config['log_path'], n_steps=task_config['n_steps'],
-                    batch_size=task_config['batch_size'], n_epochs=task_config['n_epochs'])
+        if load_model:
+            load_model_path = task_config["load_model_path"]
+            model = PPO.load(load_model_path)
+            print("model loaded, path:")
+            print(load_model_path)
+            model.learning_rate = lr_scheduler
+            model.tensorboard_log = task_config['log_path']
+            model.set_env(env)
+        else:
+            model = PPO(CustomActorCriticPolicy, env, learning_rate=lr_scheduler, verbose=0,
+                        tensorboard_log=task_config['log_path'], n_steps=task_config['n_steps'],
+                        batch_size=task_config['batch_size'], n_epochs=task_config['n_epochs'])
+            print("new model created")
     else:
         pass
 

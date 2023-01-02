@@ -45,6 +45,13 @@ def _worker(
 
             elif cmd == "update_prediction":
                 env.update_prediction(data)
+            elif cmd == "get_data_for_offline_planning":
+                c, m, p = env.get_data_for_offline_planning()
+                d = {}
+                d['c'] = c
+                d['m'] = m
+                d['p'] = p
+                remote.send(d)
             #################
             elif cmd == "render":
                 remote.send(env.render(data))
@@ -196,6 +203,11 @@ class CustomSubprocVecEnv(VecEnv):
             remote.send(("update_prediction", [cost,mask]))
 
         return True
+    def get_data_for_offline_planning(self):
+        for remote in self.remotes:
+            remote.send(("get_data_for_offline_planning", None))
+        data = [remote.recv() for remote in self.remotes]
+        return data
 
     ####!!!!!!!!!!!!!!!!!!!!!!!!!!! my func end ###############################################
     def step_async(self, actions: np.ndarray) -> None:

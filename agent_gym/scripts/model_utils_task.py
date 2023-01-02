@@ -1143,7 +1143,7 @@ class CustomNetwork_EdgeAttentionWithNodeEncoding(CustomNetwork_EdgeAttention):
     def forward_actor(self, features: th.Tensor) -> th.Tensor:
         edge_coop, coop_mask, f1, f2 = self.decode_feature(features)
         action = self.calcul_action(edge_coop, coop_mask, f1, f2)
-        masked_action = self.mask_action(action)
+        masked_action = self.mask_action(action, coop_mask)
         return masked_action
 
     def forward_critic(self, features: th.Tensor) -> th.Tensor:

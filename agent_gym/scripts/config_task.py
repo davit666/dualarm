@@ -6,8 +6,9 @@ class TaskConfig:
 
     load_model = False
     load_model_path = 'test_models/' + env_name
-    load_model_path += '/1228/share_para_low_depth_12parts_20M_mask_termination_norm_cost/RT_NP_CM_MT/SCAttNE4_2_layer_128_cat_coop_edge/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2022-12-28-22-26-04'
-    load_model_path += "/model_at_the_end"  # "/model_at_step_18999696"  #
+    # load_model_path += '/1228/share_para_low_depth_12parts_20M_mask_termination_norm_cost/RT_NP_CM_MT/SCAttNE4_2_layer_128_cat_coop_edge/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2022-12-28-22-26-04'
+    load_model_path += '/1231/share_para_high_att_depth_12parts_20M_mask_termination_norm_cost/RT_NP_CM_MT/EdgeAttentionWithNodeEncoding_64/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2022-12-31-22-08-03'
+    load_model_path += "/model_at_step_9999840"  # "/model_at_step_18999696"  #
     ######## model ########
     use_custom_network = True
 
@@ -32,7 +33,7 @@ class TaskConfig:
     mask_model_path = "../../generated_datas/good_models/mask/1203/1024_with_failure_task_datas_100_epochs/norm_ee_only_predict_succ/256-256-256_ce_adam_rl1e-3_batch_512/2022-12-02-11-47-26/model_saved/2022-12-02-12-29-48.pth"
 
     ######## env config ########
-    part_num = 10
+    part_num = 12
     robot_done_freeze = True
     default_rest_pose = True
 

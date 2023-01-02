@@ -81,18 +81,14 @@ def get_features():
     return task_features, policy_features
 
 
-
-
-
-
 class Prediction_Model():
-    def __init__(self, obs_type = None, cost_type = None, cost_model_path = None, mask_model_path = None):
+    def __init__(self, obs_type=None, cost_type=None, cost_model_path=None, mask_model_path=None):
 
-        self.device =  "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"Using {self.device} device")
 
         self.cost_types = ["coord_traj_length", "coord_steps", "coord_norm_traj_length", "coord_norm_steps"]
-        self.obs_types = ["common","ee_only", "norm_common", "norm_ee_only"]
+        self.obs_types = ["common", "ee_only", "norm_common", "norm_ee_only"]
         self.cost_prediction_model = None
         self.mask_prediction_model = None
 
@@ -144,19 +140,111 @@ class Prediction_Model():
 
     def predict_cost(self, x):
         # x = x.to(self.device)
-        pred_cost = self.cost_prediction_model.forward(x)#.item()
+        pred_cost = self.cost_prediction_model.forward(x)  # .item()
         return torch.reshape(pred_cost, pred_cost.shape[:-1])
 
     def predict_mask(self, x):
         dim = len(x.shape)
         # x = x.to(self.device)
-        pred_mask = self.mask_prediction_model.forward(x).argmax(dim = dim - 1)
+        pred_mask = self.mask_prediction_model.forward(x).argmax(dim=dim - 1)
         return pred_mask
+
     def predict_correct(self, x):
         # x = x.to(self.device)
         pred_mask = self.mask_prediction_model.forward(x).argmax(1)
         mask_shape = list(pred_mask.shape)[0]
         # print(mask_shape,"!!!!!!!!!!!!!!")
-        pred_mask = torch.reshape(pred_mask,(mask_shape,1))
-        pred_mask = (pred_mask == 0).type(torch.float)#.item()
+        pred_mask = torch.reshape(pred_mask, (mask_shape, 1))
+        pred_mask = (pred_mask == 0).type(torch.float)  # .item()
         return pred_mask
+
+    def predict_data_for_online_planning(self, obs):
+        prediction_inputs = obs["prediction_inputs"]
+        unpred_cost = obs["coop_edge_cost"]
+        unpred_mask = obs["coop_edge_mask"]
+
+        prediction_inputs_shape = prediction_inputs.shape
+
+        X = torch.tensor(prediction_inputs).to(self.device)
+        pred_cost = self.predict_cost(X).cpu().detach()  # .numpy()
+        pred_mask = self.predict_mask(X).cpu().detach()  # .numpy()
+        # print(pred_cost.shape, pred_mask.shape)
+        pred_mask[:, -1] = 1
+
+        pred_cost = torch.sum(pred_cost, -2).reshape(unpred_cost.shape).numpy().astype(np.float32)
+        pred_mask = torch.multiply(pred_mask[0, :], pred_mask[1, :]).reshape(unpred_mask.shape).numpy().astype(
+            np.float32)
+
+        obs["coop_edge_mask"] = np.multiply(pred_mask, unpred_mask)
+        # print("before",obs["coop_edge_mask"])
+        mask_terminate = obs["coop_edge_mask"][:-1, :-1].sum(axis=-2).sum(axis=-1)
+        # print("mask_termination",mask_terminate)
+        mask_terminate = mask_terminate < 1
+        # print("mask_termination", mask_terminate)
+
+        obs["coop_edge_mask"][-1, -1] = mask_terminate
+        # print("after",obs["coop_edge_mask"])
+        obs["coop_edge_cost"] = np.multiply(pred_cost, obs["coop_edge_mask"]) + np.multiply(unpred_cost,
+                                                                                            1 - obs["coop_edge_mask"])
+        obs["coop_edge_cost"] = obs["coop_edge_cost"] / 1000
+
+        return obs
+    def predict_data_for_offline_planning(self, feature, mask):
+        feature_n = feature['n']
+        feature_n2n = feature['n2n']
+        mask_n = mask['n']
+        mask_n2n = mask['n2n']
+        feature_dim = feature['dim']
+        max_cost = feature['max_cost']
+        part_num = feature['part_num']
+
+        # print(feature_n.shape, feature_n2n.shape,mask_n.shape, mask_n2n.shape)
+
+        f_n = torch.tensor(feature_n).reshape((part_num) * (part_num), feature_dim).to(self.device)
+        f_n2n = torch.tensor(feature_n2n).reshape((part_num + 1) * (part_num + 1), (part_num + 1) * (part_num + 1),
+                                                  feature_dim).to(self.device)
+
+        # m_n = torch.tensor(mask_n).reshape((part_num) * (part_num), 1).to(self.device)
+        # m_n2n = torch.tensor(mask_n2n).reshape((part_num + 1) * (part_num + 1), (part_num + 1) * (part_num + 1),
+        #                                        1).to(self.device)
+
+        # print(f_n.shape, f_n2n.shape)
+
+        pred_cost_n = self.predict_cost(f_n)
+        pred_mask_n = self.predict_mask(f_n)
+
+        pred_cost_n2n = []
+        pred_mask_n2n = []
+        for k in range(f_n2n.shape[0]):
+            pred_cost_n2n.append(self.predict_cost(f_n2n[k]))
+            pred_mask_n2n.append(self.predict_mask(f_n2n[k]))
+
+        pred_cost_n2n = torch.stack(pred_cost_n2n, dim=0)
+        pred_mask_n2n = torch.stack(pred_mask_n2n, dim=0)
+
+        # print("predicted:\t",pred_cost_n.shape, pred_cost_n2n.shape, pred_mask_n.shape, pred_mask_n2n.shape)
+
+        pred_cost_n = pred_cost_n.cpu().detach().numpy().reshape(mask_n.shape)
+        pred_mask_n = pred_mask_n.cpu().detach().numpy().reshape(mask_n.shape)
+        pred_cost_n2n = pred_cost_n2n.cpu().detach().numpy().reshape(mask_n2n.shape)
+        pred_mask_n2n = pred_mask_n2n.cpu().detach().numpy().reshape(mask_n2n.shape)
+
+        # print("shaped:\t", pred_cost_n.shape, pred_cost_n2n.shape, pred_mask_n.shape, pred_mask_n2n.shape)
+        pred_mask_n = np.multiply(pred_mask_n,mask_n)
+        pred_cost_n = np.multiply(pred_cost_n,pred_mask_n) / max_cost + (1 - pred_mask_n)
+
+        pred_mask_n2n = np.multiply(pred_mask_n2n, mask_n2n)
+        pred_cost_n2n = np.multiply(pred_cost_n2n, pred_mask_n2n) / max_cost + (1 - pred_mask_n2n)
+
+        # print("customed:\t", pred_cost_n.shape, pred_cost_n2n.shape, pred_mask_n.shape, pred_mask_n2n.shape)
+
+
+
+        c = {}
+        m ={}
+        c['n'] = pred_cost_n
+        c['n2n'] = pred_cost_n2n
+        m['n'] = pred_mask_n
+        m['n2n'] = pred_mask_n2n
+
+        return c, m

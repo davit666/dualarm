@@ -58,6 +58,7 @@ if __name__ == "__main__":
     print(reward_type, obs_type, action_type)
 
     num_cpu = task_config["num_cpu"]
+    part_num = task_config["part_num"]
 
     load_model = task_config["load_model"]
     load_model_path = task_config["load_model_path"]
@@ -94,10 +95,12 @@ if __name__ == "__main__":
         policy.policy.action_space = env.action_space
         policy.policy.mlp_extractor.mask_dim = task_config["part_num"] + 1
     ################## evaluate many episodes and get average
+    from gym_envs.baselines_pseudo_env_tasks import baselines_offline_heuristics, baseline_offline_brute_force, baseline_online_MCTS, calcul_cost
 
-    use_baseline = "min_cost_sample"
+    use_baseline = "min_cost_sample"  # "min_cost_sample"
+    baseline_function = baseline_online_MCTS
 
-    loop = 1
+    loop = 1000
     succ_num = 0
     early_finish_num = 0
     step_early_finish = []
@@ -121,12 +124,22 @@ if __name__ == "__main__":
         while not done:
             count_while += 1
             if load_model:
+                # print(1)
                 action = policy.predict(obs, deterministic=True)[0]
             elif use_baseline == "random_sample":
                 action = env.sample_action()
             elif use_baseline == "min_cost_sample":
                 action = env.sample_action()
-            obss, rewards, dones, infos = env.step(action)
+            elif use_baseline == "baselines":
+                d = env.get_data_for_offline_planning()[0]
+                c, m, p = d["c"], d["m"], d["p"]
+                costx, best_order, t = baseline_function(c, m, p)
+                # print(best_order)
+                if len(best_order) >= 2:
+                    action = best_order[0] * (part_num + 1) + best_order[1]
+                else:
+                    action = (part_num + 1) ** 2 - 1
+            obss, rewards, dones, infos = env.step([action])
             obs = obss
             reward = rewards[0]
             done = dones[0]
@@ -151,9 +164,9 @@ if __name__ == "__main__":
             step_early_finish.append(info["1_num_steps"])
             early_finish_task_num.append(info["4_succ_task_num/task_num"])
 
-        # if l % (loop // 100) == 0:
-        #     print(l // (loop // 100), "\t", time.time() - time0)
-        #     print("cost:\t", sum(acc_cost) / succ_num)
+        if l % (loop // 100) == 0:
+            print(l // (loop // 100), "\t", time.time() - time0)
+            print("cost:\t", sum(acc_cost) / succ_num)
 
     eva_data = {}
 

@@ -312,7 +312,7 @@ class Env_tasks(gym.GoalEnv):
             part_done = part.is_success
 
             # part_init[2] += (np.random.random() - 0.5) / 50
-            part_goal[2] += (np.random.random() - 0.5) / 50
+            # part_goal[2] += (np.random.random() - 0.5) / 50
 
             self.state_info["part_init_{}".format(j + 1)] = part_init
             self.state_info["part_goal_{}".format(j + 1)] = part_goal
@@ -491,6 +491,7 @@ class Env_tasks(gym.GoalEnv):
         prediction_inputs_obs2 = np.stack(prediction_inputs_obs2, axis=0)
 
         prediction_inputs = np.stack([prediction_inputs_obs1, prediction_inputs_obs2], axis=0)
+        # print(prediction_inputs.shape)
         return prediction_inputs.astype(np.float32)
 
     def update_prediction(self, data):
@@ -538,8 +539,8 @@ class Env_tasks(gym.GoalEnv):
 
         # apply_action
         cost, check = self.apply_action(allocator_action)
-        print("action:\t", allocator_action)
-        print("cost:\t",cost)
+        # print("action:\t", allocator_action)
+        # print("cost:\t",cost)
         self.accumulated_cost += cost
         # get new observation without cost_updated
         observation = self._observation()
@@ -694,7 +695,7 @@ class Env_tasks(gym.GoalEnv):
                 # reward += self.accumulated_reward
                 pass
             else:
-                reward -= self.global_success_bonus
+                # reward -= self.global_success_bonus
                 # reward -= sum([not part.is_success for part in self.parts])
         return reward
 
@@ -844,7 +845,7 @@ class Env_tasks(gym.GoalEnv):
             part_done = part.is_success
 
             # part_init[2] += (np.random.random() - 0.5) / 50
-            part_goal[2] += (np.random.random() - 0.5) / 50
+            # part_goal[2] += (np.random.random() - 0.5) / 50
 
             # normalize
             norm_part_init = self.normalize_cartesian_pose(part_init)
@@ -864,7 +865,8 @@ class Env_tasks(gym.GoalEnv):
 
         cost_node = np.ones((self.parts_num, self.parts_num)) * self.max_cost_const
         mask_node = np.zeros((self.parts_num, self.parts_num))
-        cost_node2node = np.ones((self.parts_num + 1, self.parts_num + 1, self.parts_num + 1, self.parts_num + 1)) * self.max_cost_const
+        cost_node2node = np.ones(
+            (self.parts_num + 1, self.parts_num + 1, self.parts_num + 1, self.parts_num + 1)) * self.max_cost_const
         mask_node2node = np.zeros((self.parts_num + 1, self.parts_num + 1, self.parts_num + 1, self.parts_num + 1))
 
         if not self.use_prediction_model:
@@ -966,10 +968,31 @@ class Env_tasks(gym.GoalEnv):
             mask_node2node[self.parts_num, self.parts_num, self.parts_num, self.parts_num] = 0
             cost_node2node[self.parts_num, self.parts_num, self.parts_num, self.parts_num] = self.max_cost_const
 
-            cost_node2node  = cost_node2node / 2.
+            cost_node2node = cost_node2node / 2.
             cost_node = cost_node / 2.
 
+            # cost_data['s2n'] = cost_start2node
+            cost_data['n'] = cost_node
+            cost_data['n2n'] = cost_node2node
+            # cost_data['n2e'] = cost_node2end
+
+            # mask_data['s2n'] = mask_start2node
+            mask_data['n'] = mask_node
+            mask_data['n2n'] = mask_node2node
+            # mask_data['n3s'] = mask_node2end
+
+            return cost_data, mask_data, parts_mask
+
         else:
+            fearure_dim = 20
+            fearure_n2n = np.zeros(
+                (self.parts_num + 1, self.parts_num + 1, self.parts_num + 1, self.parts_num + 1, fearure_dim))
+            fearure_n = np.zeros(
+                (self.parts_num, self.parts_num, fearure_dim))
+
+            mask_n = np.zeros((self.parts_num, self.parts_num))
+            mask_n2n = np.zeros((self.parts_num + 1, self.parts_num + 1, self.parts_num + 1, self.parts_num + 1))
+
             # for start 2 node
             for j1 in range(self.parts_num):
                 for j2 in range(self.parts_num):
@@ -985,7 +1008,11 @@ class Env_tasks(gym.GoalEnv):
                     dist_rz2 = np.linalg.norm(init_ee2[3:] - goal_ee2[3:])
                     obs2 = np.concatenate([init_ee2, goal_ee2, [dist_xyz2], [dist_rz2]])
 
-                    cost_node2node[self.parts_num, j1, self.parts_num, j2] = np.concatenate([obs1, obs2])
+                    fearure_n2n[self.parts_num, j1, self.parts_num, j2, :] = np.concatenate([obs1, obs2])[:]
+                    if j1 == j2:
+                        mask_n2n[self.parts_num, j1, self.parts_num, j2] = 0
+                    else:
+                        mask_n2n[self.parts_num, j1, self.parts_num, j2] = 1
             # for node transfer
             for j1 in range(self.parts_num):
                 for j2 in range(self.parts_num):
@@ -1001,8 +1028,12 @@ class Env_tasks(gym.GoalEnv):
                     dist_rz2 = np.linalg.norm(init_ee2[3:] - goal_ee2[3:])
                     obs2 = np.concatenate([init_ee2, goal_ee2, [dist_xyz2], [dist_rz2]])
 
-                    cost_node[j1, j2] = np.concatenate([obs1, obs2])
-            # for node 2 node transfer
+                    fearure_n[j1, j2, :] = np.concatenate([obs1, obs2])[:]
+                    if j1 == j2:
+                        mask_n[j1, j2] = 0
+                    else:
+                        mask_n[j1, j2] = 1
+            # for node 2 node transit
             for j1_init in range(self.parts_num):
                 for j1_goal in range(self.parts_num):
                     for j2_init in range(self.parts_num):
@@ -1019,7 +1050,17 @@ class Env_tasks(gym.GoalEnv):
                             dist_rz2 = np.linalg.norm(init_ee2[3:] - goal_ee2[3:])
                             obs2 = np.concatenate([init_ee2, goal_ee2, [dist_xyz2], [dist_rz2]])
 
-                            cost_node2node[j1_init, j1_goal, j2_init, j2_goal] = np.concatenate([obs1, obs2])
+                            fearure_n2n[j1_init, j1_goal, j2_init, j2_goal, :] = np.concatenate([obs1, obs2])[:]
+                            if j1_init == j1_goal:
+                                mask_n2n[j1_init, j1_goal, j2_init, j2_goal] = 0
+                            elif j2_init == j2_goal:
+                                mask_n2n[j1_init, j1_goal, j2_init, j2_goal] = 0
+                            elif j1_init == j2_init:
+                                mask_n2n[j1_init, j1_goal, j2_init, j2_goal] = 0
+                            elif j1_goal == j2_goal:
+                                mask_n2n[j1_init, j1_goal, j2_init, j2_goal] = 0
+                            else:
+                                mask_n2n[j1_init, j1_goal, j2_init, j2_goal] = 1
             # for node 2 end
             for j1 in range(self.parts_num):
                 for j2 in range(self.parts_num):
@@ -1035,7 +1076,11 @@ class Env_tasks(gym.GoalEnv):
                     dist_rz2 = np.linalg.norm(init_ee2[3:] - goal_ee2[3:])
                     obs2 = np.concatenate([init_ee2, goal_ee2, [dist_xyz2], [dist_rz2]])
 
-                    cost_node2node[j1, self.parts_num, j2, self.parts_num] = np.concatenate([obs1, obs2])
+                    fearure_n2n[j1, self.parts_num, j2, self.parts_num, :] = np.concatenate([obs1, obs2])[:]
+                    if j1 == j2:
+                        mask_n2n[j1, self.parts_num, j2, self.parts_num] = 0
+                    else:
+                        mask_n2n[j1, self.parts_num, j2, self.parts_num] = 1
 
             init_ee1 = robots_ee[0]
             goal_ee1 = robots_goal[0]
@@ -1049,19 +1094,22 @@ class Env_tasks(gym.GoalEnv):
             dist_rz2 = np.linalg.norm(init_ee2[3:] - goal_ee2[3:])
             obs2 = np.concatenate([init_ee2, goal_ee2, [dist_xyz2], [dist_rz2]])
 
-            cost_node2node[self.parts_num, self.parts_num, self.parts_num, self.parts_num] = np.concatenate([obs1, obs2])
+            fearure_n2n[self.parts_num, self.parts_num, self.parts_num, self.parts_num, :] = np.concatenate(
+                [obs1, obs2])[:]
+            mask_n2n[self.parts_num, self.parts_num, self.parts_num, self.parts_num] = 1
 
-        # cost_data['s2n'] = cost_start2node
-        cost_data['n'] = cost_node
-        cost_data['n2n'] = cost_node2node
-        # cost_data['n2e'] = cost_node2end
+            feature = {}
+            feature['n'] = fearure_n.astype(np.float32)
+            feature['n2n'] = fearure_n2n.astype(np.float32)
+            feature['dim'] = fearure_dim
+            feature['max_cost'] = self.max_cost_const
+            feature['part_num'] = self.parts_num
 
-        # mask_data['s2n'] = mask_start2node
-        mask_data['n'] = mask_node
-        mask_data['n2n'] = mask_node2node
-        # mask_data['n3s'] = mask_node2end
+            mask = {}
+            mask['n'] = mask_n
+            mask['n2n'] = mask_n2n
 
-        return cost_data, mask_data, parts_mask
+            return feature, mask, parts_mask
 
     ####################################### task allocators ################################
     # def distance_based_allocator(self, obs=None):

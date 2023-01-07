@@ -44,7 +44,8 @@ def _worker(
                 remote.send(sampled_action)
 
             elif cmd == "update_prediction":
-                env.update_prediction(data)
+                obs = env.update_prediction(data)
+                remote.send(obs)
             elif cmd == "get_data_for_offline_planning":
                 c, m, p = env.get_data_for_offline_planning()
                 d = {}
@@ -202,7 +203,10 @@ class CustomSubprocVecEnv(VecEnv):
         for remote,cost,mask in zip(self.remotes, obs['coop_edge_cost'], obs['coop_edge_mask']):
             remote.send(("update_prediction", [cost,mask]))
 
-        return True
+        obs = [remote.recv() for remote in self.remotes]
+        obs = _flatten_obs(obs, self.observation_space)
+
+        return obs
     def get_data_for_offline_planning(self):
         for remote in self.remotes:
             remote.send(("get_data_for_offline_planning", None))
@@ -224,7 +228,7 @@ class CustomSubprocVecEnv(VecEnv):
         obs = _flatten_obs(obs, self.observation_space)
         if self.use_prediction_model:
             obs = self.predict_cost_and_mask(obs)
-            self.update_cost_and_mask(obs)
+            obs = self.update_cost_and_mask(obs)
 
         #######################3
         return obs, np.stack(rews), np.stack(dones), infos
@@ -245,7 +249,7 @@ class CustomSubprocVecEnv(VecEnv):
         obs = _flatten_obs(obs, self.observation_space)
         if self.use_prediction_model:
             obs = self.predict_cost_and_mask(obs)
-            self.update_cost_and_mask(obs)
+            obs = self.update_cost_and_mask(obs)
 
         #######################3
 

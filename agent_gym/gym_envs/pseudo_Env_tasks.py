@@ -85,6 +85,8 @@ class Env_tasks(gym.GoalEnv):
         self.default_rest_pose = env_config['default_rest_pose']
         self.hard_mask = False
         self.mask_termination = True
+
+        self.mask_done_task = True
         ######### define gym conditions
 
         # pass
@@ -177,6 +179,7 @@ class Env_tasks(gym.GoalEnv):
 
         self.accumulated_reward = 0
         self.accumulated_cost = 0
+        self.accumulated_cost2 = 0
         # self.accumulated_reward_dict['robots'] = [0] * self.robots_num
         # self.accumulated_reward_dict['parts'] = [0] * self.parts_num
         # self.accumulated_reward_dict['task'] = 0
@@ -357,6 +360,9 @@ class Env_tasks(gym.GoalEnv):
                 self.state_info["robot_{}_node_obs2_{}".format(i + 1, j + 1)] = obs2
                 self.state_info["robot_{}_node_mask_{}".format(i + 1, j + 1)] = node_mask
 
+                if self.mask_done_task:
+                    node_obs *= parts_mask[j]
+
                 robot_nodes.append(node_obs)
 
             # robot reset node
@@ -402,6 +408,9 @@ class Env_tasks(gym.GoalEnv):
                         goal_ee1 = parts_init[n]
                         task_edge_xyz[m, n] = np.linalg.norm(init_ee1[:3] - goal_ee1[:3])
                         task_edge_rz[m, n] = np.linalg.norm(init_ee1[3:] - goal_ee1[3:])
+                        if self.mask_done_task:
+                            task_edge_xyz[m, n] *= parts_mask[m]
+                            task_edge_xyz[m, n] *= parts_mask[n]
 
                 # edge: to reset
                 init_ee1 = parts_goal[m]
@@ -455,6 +464,11 @@ class Env_tasks(gym.GoalEnv):
             if coop_edge_mask[:-1, :-1].sum() < 1:
                 coop_edge_mask[-1, -1] = 1
 
+        if self.mask_done_task:
+            for m in range(self.parts_num + 1):
+                for n in range(self.parts_num + 1):
+                    coop_edge_cost[m, n] *= coop_edge_mask[m, n]
+
         self.state_info["robots_nodes"] = robots_nodes
         self.state_info['robots_task_edge_xyz'] = robots_task_edge_xyz
         self.state_info['robots_task_edge_rz'] = robots_task_edge_rz
@@ -465,7 +479,10 @@ class Env_tasks(gym.GoalEnv):
         #### prediction model input
         self.state_info["prediction_inputs"] = self.get_prediction_obs()
         self.state_info["prediction_inputs_shape"] = self.state_info["prediction_inputs"].shape
-        self.prediction_updated = False
+        if self.use_prediction_model:
+            self.prediction_updated = False
+        else:
+            self.custom_coop_edge()
 
         return self.state_info
 
@@ -501,17 +518,61 @@ class Env_tasks(gym.GoalEnv):
         cost = data[0]
         mask = data[1]
 
-        # print("cost",cost)
-        # print("mask",mask)
-        #
-        # self.state_info["coop_edge_mask"] = np.multiply(mask, self.state_info["coop_edge_mask"])
-        # self.state_info["coop_edge_cost"] = np.multiply(cost, self.state_info["coop_edge_mask"]) + self.max_cost_const * (1 - self.state_info["coop_edge_mask"])
-
         self.state_info["coop_edge_mask"] = mask
         self.state_info["coop_edge_cost"] = cost
-        # self.state_info["coop_edge_cost"][-1, -1] = 1
         self.prediction_updated = True
-        return self.prediction_updated
+
+        ###### custom coop edge
+        self.custom_coop_edge()
+
+        state_dict = self.state_info
+        robot_nodes = state_dict["robots_nodes"]
+        robots_task_edge_dist = state_dict['robots_task_edge_xyz']
+        robots_task_edge_mask = state_dict['robots_task_edge_mask']
+        coop_edge_cost = state_dict["coop_edge_cost"]
+        coop_edge_mask = state_dict['coop_edge_mask']
+        prediction_inputs = state_dict['prediction_inputs']
+
+        observation = {}
+        for i in range(self.robots_num):
+            for j in range(self.parts_num):
+                observation['robot_{}_node_{}'.format(i + 1, j + 1)] = robot_nodes[i][j].astype(np.float32)
+            observation['robot_{}_node_reset'.format(i + 1)] = robot_nodes[i][self.parts_num].astype(np.float32)
+            observation['robot_{}_task_edge_dist'.format(i + 1)] = robots_task_edge_dist[i].astype(np.float32)
+            observation['robot_{}_task_edge_mask'.format(i + 1)] = robots_task_edge_mask[i].astype(np.float32)
+        observation['coop_edge_cost'] = coop_edge_cost.astype(np.float32)
+        observation['coop_edge_mask'] = coop_edge_mask.astype(np.float32)
+        observation['prediction_inputs'] = prediction_inputs.astype(np.float32)
+
+        return observation
+
+    def custom_coop_edge(self):
+        cost_map = self.state_info["coop_edge_cost"][:self.parts_num, :self.parts_num].flatten()
+        mask_map = self.state_info["coop_edge_mask"][:self.parts_num, :self.parts_num].flatten()
+        # print(cost_map)
+        # print(mask_map)
+
+        # choice_num = 5
+        # idx = np.argpartition(cost_map, choice_num)[:choice_num]
+        # # print(idx, c)
+        # for k in range(len(mask_map)):
+        #     if k in idx:
+        #         pass
+        #     else:
+        #         mask_map[k] = mask_map[k] * 0.99
+        #
+        # mask_map = mask_map.reshape(self.parts_num, self.parts_num)
+        #
+        # # print(mask_map)
+        # self.state_info["coop_edge_mask"][:self.parts_num, :self.parts_num] = mask_map[:, :]
+
+        if self.mask_done_task:
+            for m in range(self.parts_num + 1):
+                for n in range(self.parts_num + 1):
+                    self.state_info["coop_edge_cost"][m, n] *= self.state_info["coop_edge_mask"][m, n]
+
+
+        return True
 
     def normalize_cartesian_pose(self, cartesian_pose, normalize_orn=False):
         if len(cartesian_pose) == 0:
@@ -541,7 +602,6 @@ class Env_tasks(gym.GoalEnv):
         cost, check = self.apply_action(allocator_action)
         # print("action:\t", allocator_action)
         # print("cost:\t",cost)
-        self.accumulated_cost += cost
         # get new observation without cost_updated
         observation = self._observation()
         # get reward
@@ -682,20 +742,27 @@ class Env_tasks(gym.GoalEnv):
         return cost, check
 
     def _reward(self, cost, check):
-        reward = - cost  # / (self.max_cost_const * 2)
 
-        reward += 1  # (check-1)
+        self.accumulated_cost += cost
+        self.accumulated_cost2 += (1 - cost)
 
-        reward *= 1
+        if check == 0:
+            reward = -1
+        else:
+            # reward = 1 - cost
+            reward = - cost
+            # reward = 0
 
         if all([robot.is_done for robot in self.robots]):
-            reward += self.accumulated_reward
+            reward -= self.accumulated_reward
+            # reward += self.accumulated_cost2
             if all([part.is_success for part in self.parts]):
                 # reward += self.global_success_bonus
                 # reward += self.accumulated_reward
                 pass
             else:
-                # reward -= self.global_success_bonus
+                pass
+                reward = - self.global_success_bonus
                 # reward -= sum([not part.is_success for part in self.parts])
         return reward
 

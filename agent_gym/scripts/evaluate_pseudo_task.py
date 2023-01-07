@@ -166,7 +166,8 @@ if __name__ == "__main__":
 
         if l % (loop // 100) == 0:
             print(l // (loop // 100), "\t", time.time() - time0)
-            print("cost:\t", sum(acc_cost) / succ_num)
+            print("suss:\t", succ_num / max(l, 1))
+            print("cost:\t", sum(acc_cost) / max(succ_num, 1))
 
     eva_data = {}
 

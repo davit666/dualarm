@@ -7,14 +7,17 @@ class TaskConfig:
     load_model = False
     load_model_path = 'test_models/' + env_name
     # load_model_path += '/1228/share_para_low_depth_12parts_20M_mask_termination_norm_cost/RT_NP_CM_MT/SCAttNE4_2_layer_128_cat_coop_edge/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2022-12-28-22-26-04'
-    load_model_path += '/1231/share_para_high_att_depth_12parts_20M_mask_termination_norm_cost/RT_NP_CM_MT/EdgeAttentionWithNodeEncoding_64/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2022-12-31-22-08-03'
-    load_model_path += "/model_at_step_9999840"  # "/model_at_step_18999696"  #
+    # load_model_path += '/1231/share_para_high_att_depth_12parts_20M_mask_termination_norm_cost/RT_NP_CM_MT/EdgeAttentionWithNodeEncoding_64/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2022-12-31-22-08-03'
+    # load_model_path += '/0102/share_para_high_att_depth_6parts_12M_mask_termination_norm_cost/RT_P_CM_MT/EdgeAttentionWithNodeEncoding_64/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-01-02-23-54-29'
+    # load_model_path += '/0102/share_para_high_att_depth_6parts_12M_mask_termination_norm_cost_penalty_R/RT_P_CM_MT/EdgeAttentionWithNodeEncoding_64/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-01-02-23-17-06'
+    load_model_path += '/0103/share_para_high_att_depth_6parts_12M_mask_termination_norm_cost_penalty_R/RT_NP_CM_MT-AC5/EdgeAttentionWithNodeEncoding_64/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-01-03-21-25-43/model_at_step_13499784'
+    # load_model_path += "/model_at_step_7999872" #"/model_at_step_9999840"  # "/model_at_step_18999696"  #
     ######## model ########
     use_custom_network = True
 
-    model_date = env_name + "/monitoring/" + time.strftime("%m%d")
-    custom_network_type = "EdgeAttentionWithNodeEncoding_64"  # "SCAttNE_3_layer_cat_coop_edge"#"custom_self_cross_attention_edge"#"custom_flatten_all"#"custom_flatten_node"#
-    model_name = "share_para_high_att_depth_12parts_20M_mask_termination_norm_cost" \
+    model_date = env_name + "/monitoring3/" + time.strftime("%m%d")
+    custom_network_type = "EdgeAttentionWithNodeEncoding2_64"  # "SCAttNE_3_layer_cat_coop_edge"#"custom_self_cross_attention_edge"#"custom_flatten_all"#"custom_flatten_node"#
+    model_name = "r_4_6parts_20M_sharenet_att_lr3e-4_MD" \
                  + "/RT_NP_CM_MT"
 
     alg_name = "PPO"
@@ -33,7 +36,7 @@ class TaskConfig:
     mask_model_path = "../../generated_datas/good_models/mask/1203/1024_with_failure_task_datas_100_epochs/norm_ee_only_predict_succ/256-256-256_ce_adam_rl1e-3_batch_512/2022-12-02-11-47-26/model_saved/2022-12-02-12-29-48.pth"
 
     ######## env config ########
-    part_num = 12
+    part_num = 6
     robot_done_freeze = True
     default_rest_pose = True
 
@@ -41,8 +44,8 @@ class TaskConfig:
     dynamic_task = False
 
     max_cost_const = 1000
-    global_success_bonus = 10
-    reward_scale = 1
+    global_success_bonus = 1
+    reward_scale = 5
 
     partsBaseSize = [4.8 / 2, 1.65 / 2, 0.35 / 2]
     partsBasePos = [-0, 0, 0 + partsBaseSize[2]]
@@ -62,11 +65,11 @@ class TaskConfig:
     ######## cpu ########
     num_cpu = 24
     ######## lr scheduler ########
-    use_lr_scheduler = True
+    use_lr_scheduler = False
     ######## parameter ########
     learning_rate = 3e-4
     n_steps = 2048
-    batch_size = 512
+    batch_size = 256
     n_epochs = 10
 
     total_timesteps = 2e7

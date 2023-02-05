@@ -15,15 +15,15 @@ class TaskConfig:
     ######## model ########
     use_custom_network = True
 
-    model_date = env_name + "/monitoring3/" + time.strftime("%m%d")
-    custom_network_type = "EdgeAttentionWithNodeEncoding2_64"  # "SCAttNE_3_layer_cat_coop_edge"#"custom_self_cross_attention_edge"#"custom_flatten_all"#"custom_flatten_node"#
-    model_name = "r_4_6parts_20M_sharenet_att_lr3e-4_MD" \
+    model_date = env_name + "/monitoring4/" + time.strftime("%m%d")
+    custom_network_type = "EdgeAttentionWithNodeEncoding3_64"  # "SCAttNE_3_layer_cat_coop_edge"#"custom_self_cross_attention_edge"#"custom_flatten_all"#"custom_flatten_node"#
+    model_name = "box_fix_sample_mask_type2_r_1_4parts_20M__lr3e-4" \
                  + "/RT_NP_CM_MT"
 
     alg_name = "PPO"
     task_allocator_reward_type = "negative_normalized_cost_with_sparse_success_bonus"
     task_allocator_obs_type = "common_dict_obs"
-    task_allocator_action_type = "Discrete"  # "MultiDiscrete"
+    task_allocator_action_type = "Box"#"Discrete"  # "MultiDiscrete"
 
     use_prediction_model = False
 
@@ -36,7 +36,10 @@ class TaskConfig:
     mask_model_path = "../../generated_datas/good_models/mask/1203/1024_with_failure_task_datas_100_epochs/norm_ee_only_predict_succ/256-256-256_ce_adam_rl1e-3_batch_512/2022-12-02-11-47-26/model_saved/2022-12-02-12-29-48.pth"
 
     ######## env config ########
-    part_num = 6
+    part_num = 4
+
+    fix_box_sample = True
+    mask_done_task = False
     robot_done_freeze = True
     default_rest_pose = True
 
@@ -69,7 +72,7 @@ class TaskConfig:
     ######## parameter ########
     learning_rate = 3e-4
     n_steps = 2048
-    batch_size = 256
+    batch_size = 2048
     n_epochs = 10
 
     total_timesteps = 2e7
@@ -119,6 +122,8 @@ def load_config():
     task_config['mask_model_path'] = T.mask_model_path
     ######## env config ########
     task_config['part_num'] = T.part_num
+    task_config['fix_box_sample'] = T.fix_box_sample
+    task_config['mask_done_task'] = T.mask_done_task
     task_config['robot_done_freeze'] = T.robot_done_freeze
     task_config['task_type'] = T.task_type
     task_config['dynamic_task'] = T.dynamic_task

@@ -63,7 +63,7 @@ if __name__ == "__main__":
 
     task_config = load_config()
 
-    task_config["task_allocator_action_type"] = "Discrete"
+    # task_config["task_allocator_action_type"] = "Discrete"
 
     task_allocator_reward_type = task_config["task_allocator_reward_type"]
     task_allocator_obs_type = task_config["task_allocator_obs_type"]
@@ -72,9 +72,9 @@ if __name__ == "__main__":
     use_prediction_model = task_config["use_prediction_model"]
 
     # # #### load env
-    # num_cpu = 1
+    num_cpu = 1
 
-    # env = CustomSubprocVecEnv([make_env(task_config, renders=True) for i in range(num_cpu)])
+    env = CustomSubprocVecEnv([make_env(task_config, renders=False) for i in range(num_cpu)])
     #### define input output type to use
     cost_type = "coord_steps"  # "coord_steps"
     obs_type = "norm_ee_only"
@@ -84,40 +84,40 @@ if __name__ == "__main__":
 
     print("!!!!!!!!!!!!!!!!!!!!!!!!!1")
     #### load prediction model
-    # prediction_model = (
-    #     Prediction_Model(obs_type=obs_type, cost_type=cost_type, cost_model_path=cost_model_path, mask_model_path=mask_model_path)
-    #     if use_prediction_model
-    #     else None
-    # )
+    prediction_model = (
+        Prediction_Model(obs_type=obs_type, cost_type=cost_type, cost_model_path=cost_model_path, mask_model_path=mask_model_path)
+        if use_prediction_model
+        else None
+    )
     # input_features, cost_features, mask_features = prediction_model.get_input_and_output()
-    #
+
     # input_shape = len(input_features)
     # cost_shape = len(cost_features)
     # mask_shape = len(mask_features)
 
     ######################## test a full episode with prediction
-    # use_prediction_model = task_config["use_prediction_model"]
-    # env.load_prediction_model(prediction_model, input_type=obs_type, output_type=cost_type, use_prediction_model=use_prediction_model)
+    use_prediction_model = task_config["use_prediction_model"]
+    env.load_prediction_model(prediction_model, input_type=obs_type, output_type=cost_type, use_prediction_model=use_prediction_model)
 
-    # obs = env.reset()
-    # z_o = []
-    # z_a = []
-    # z_r = []
-    # z_d = []
-    # z_i = []
-    # for i in range(100):
-    #     acts = env.sample_action()
-    #     print(acts)
-    #     obs, rews, dones, infos = env.step(acts)
+    obs = env.reset()
+    z_o = []
+    z_a = []
+    z_r = []
+    z_d = []
+    z_i = []
+    for i in range(100):
+        acts = env.sample_action()
+        print(acts)
+        obs, rews, dones, infos = env.step(acts)
 
-    #     z_o.append(obs)
-    #     z_a.append(acts)
-    #     z_r.append(rews)
-    #     z_d.append(dones)
-    #     z_i.append(infos)
-    #     # print(i,acts)
-    #     if dones[0]:
-    #         break
+        z_o.append(obs)
+        z_a.append(acts)
+        z_r.append(rews)
+        z_d.append(dones)
+        z_i.append(infos)
+        # print(i,acts)
+        if dones[0]:
+            break
 
     ################ test feature extractor
     # from stable_baselines3.common.utils import get_device, is_vectorized_observation, obs_as_tensor
@@ -260,30 +260,30 @@ if __name__ == "__main__":
     #     print("\n")
 
     ######################### test plot
-    task_config["use_prediction_model"] = False
-    from gym_envs.baselines_pseudo_env_tasks import baselines_offline_heuristics, baseline_offline_brute_force, baseline_online_MCTS, calcul_cost
+    # task_config["use_prediction_model"] = False
+    # from gym_envs.baselines_pseudo_env_tasks import baselines_offline_heuristics, baseline_offline_brute_force, baseline_online_MCTS, calcul_cost
 
-    env = Env_tasks(
-        task_config,
-        renders=False,
-        task_allocator_reward_type=task_allocator_reward_type,
-        task_allocator_obs_type=task_allocator_obs_type,
-        task_allocator_action_type=task_allocator_action_type,
-    )
+    # env = Env_tasks(
+    #     task_config,
+    #     renders=False,
+    #     task_allocator_reward_type=task_allocator_reward_type,
+    #     task_allocator_obs_type=task_allocator_obs_type,
+    #     task_allocator_action_type=task_allocator_action_type,
+    # )
 
-    prediction_model = (
-        Prediction_Model(obs_type=obs_type, cost_type=cost_type, cost_model_path=cost_model_path, mask_model_path=mask_model_path)
-        if task_config["use_prediction_model"]
-        else None
-    )
+    # prediction_model = (
+    #     Prediction_Model(obs_type=obs_type, cost_type=cost_type, cost_model_path=cost_model_path, mask_model_path=mask_model_path)
+    #     if task_config["use_prediction_model"]
+    #     else None
+    # )
 
-    time0 = time.time()
-    parts_num = task_config["part_num"]
+    # time0 = time.time()
+    # parts_num = task_config["part_num"]
 
     #### test prediction
-    obs = env.reset()
-    action = env.sample_action()
-    obs, r, done, info = env.step(action)
+    # obs = env.reset()
+    # action = env.sample_action()
+    # obs, r, done, info = env.step(action)
     # if task_config["use_prediction_model"]:
     #     f, m0, p = env.get_data_for_offline_planning()
     #     c, m = prediction_model.predict_data_for_offline_planning(f, m0)

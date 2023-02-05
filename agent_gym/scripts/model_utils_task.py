@@ -61,10 +61,12 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
         #                                                               discrete_action_space=self.discrete_action_space)
         # self.mlp_extractor = CustomNetwork_EdgeAttention(self.node_features_dim, self.mask_dim,
         #                                                  discrete_action_space=self.discrete_action_space)
-        self.mlp_extractor = CustomNetwork_EdgeAttentionWithNodeEncoding(self.node_features_dim, self.mask_dim,
-                                                                         discrete_action_space=self.discrete_action_space)
+        # self.mlp_extractor = CustomNetwork_EdgeAttentionWithNodeEncoding(self.node_features_dim, self.mask_dim,
+        #                                                                  discrete_action_space=self.discrete_action_space)
         # self.mlp_extractor = CustomNetwork_EdgeAttentionWithNodeEncoding2(self.node_features_dim, self.mask_dim,
         #                                                                  discrete_action_space=self.discrete_action_space)
+        self.mlp_extractor = CustomNetwork_EdgeAttentionWithNodeEncoding3(self.node_features_dim, self.mask_dim,
+                                                                          discrete_action_space=self.discrete_action_space)
 
 
 ####################################3 custom actor critic network
@@ -1198,6 +1200,7 @@ class CustomNetwork_EdgeAttentionWithNodeEncoding(CustomNetwork_EdgeAttention):
 
 
 class CustomNetwork_EdgeAttentionWithNodeEncoding2(CustomNetwork_EdgeAttentionWithNodeEncoding):
+    ## custom att net 1, but encode edge fearure by linear(self,node1, node2), instead of attention(edges)
     def setup(self):
         # node decoder
         self.node_decoder1_1 = MultiHeadSelfCrossAttentionWithNodeAndEdge2(self.feature_dim, self.head_num,
@@ -1324,6 +1327,168 @@ class CustomNetwork_EdgeAttentionWithNodeEncoding2(CustomNetwork_EdgeAttentionWi
         return edge_task
 
 
+class CustomNetwork_EdgeAttentionWithNodeEncoding3(CustomNetwork_EdgeAttentionWithNodeEncoding):
+    ## custom att net 2 for box output
+    def setup(self):
+        # node decoder
+        self.node_decoder1_1 = MultiHeadSelfCrossAttentionWithNodeAndEdge2(self.feature_dim, self.head_num,
+                                                                         self.feature_dim)
+        self.node_decoder2_1 = MultiHeadSelfCrossAttentionWithNodeAndEdge2(self.feature_dim, self.head_num,
+                                                                         16)
+
+        self.node_decoder1_2 = MultiHeadSelfCrossAttentionWithNodeAndEdge2(self.feature_dim, self.head_num,
+                                                                         self.feature_dim)
+        self.node_decoder2_2 = MultiHeadSelfCrossAttentionWithNodeAndEdge2(self.feature_dim, self.head_num,
+                                                                         16)
+
+        self.coop_edge_decoder1 = nn.Linear(self.feature_dim * 3, self.feature_dim)
+        self.coop_edge_decoder2 = nn.Linear(self.feature_dim * 3, self.feature_dim)
+
+        self.task_edge_decoder1_1 = nn.Linear(self.feature_dim * 3, self.feature_dim)
+        self.task_edge_decoder2_1 = nn.Linear(self.feature_dim * 3, self.feature_dim)
+        self.task_edge_decoder1_2 = nn.Linear(self.feature_dim * 3, self.feature_dim)
+        self.task_edge_decoder2_2 = nn.Linear(self.feature_dim * 3, self.feature_dim)
+
+        # Policy network
+        self.policy_net = nn.Linear(16, 1)
+
+        # Value network
+        self.value_net_1 = nn.Linear(16, 16)
+        self.value_net_2 = nn.Sequential(
+            nn.Linear(self.mask_dim * 2 * 16, self.latent_dim_vf)
+        )
+
+    def decode_feature(self, features):
+        f_r1 = features["robot_1_node"]
+        f_r2 = features["robot_2_node"]
+        # return f_r1, f_r2
+
+        edge_r1 = features["robot_1_task_edge_dist"]
+        edge_r2 = features["robot_2_task_edge_dist"]
+
+        mask1 = th.unsqueeze(features["robot_1_task_edge_mask"], 1)
+        mask2 = th.unsqueeze(features["robot_2_task_edge_mask"], 1)
+
+        edge_coop = features["coop_edge_cost"]
+        coop_mask = features["coop_edge_mask"]
+
+        ###############################
+        edge_coop = self.decode_coop_edge(edge_coop, coop_mask, f_r1, f_r2, self.coop_edge_decoder1)
+        edge_r1 = self.decode_task_edge(edge_r1, mask1, f_r1, self.task_edge_decoder1_1)
+        edge_r2 = self.decode_task_edge(edge_r2, mask2, f_r2, self.task_edge_decoder1_2)
+
+        f_r1_1 = self.node_decoder1_1(f_r1, f_r2, edge_r1, edge_coop, masks=mask1, maskc=coop_mask)
+        f_r2_1 = self.node_decoder1_2(f_r2, f_r1, edge_r2, edge_coop.transpose(-3, -2), masks=mask2,
+                                    maskc=coop_mask.transpose(-2, -1))
+        edge_coop = self.decode_coop_edge(edge_coop, coop_mask, f_r1_1, f_r2_1, self.coop_edge_decoder2)
+
+        edge_r1 = self.decode_task_edge(edge_r1, mask1, f_r1_1, self.task_edge_decoder2_1)
+        edge_r2 = self.decode_task_edge(edge_r2, mask2, f_r2_1, self.task_edge_decoder2_2)
+        f_r1_2 = self.node_decoder2_1(f_r1_1, f_r2_1, edge_r1, edge_coop, masks=mask1, maskc=coop_mask)
+        f_r2_2 = self.node_decoder2_2(f_r2_1, f_r1_1, edge_r2, edge_coop.transpose(-3, -2), masks=mask2,
+                                      maskc=coop_mask.transpose(-2, -1))
+        # edge_coop = self.decode_coop_edge(edge_coop, coop_mask, f_r1_1, f_r2_1, self.coop_edge_decoder3)
+
+        edge_coop = th.flatten(edge_coop, -3, -2)
+        # coop_mask = th.flatten(coop_mask, -2, -1)
+        return edge_coop, coop_mask, f_r1_2, f_r2_2
+
+    def decode_coop_edge(self, edge_coop, coop_mask, f_r1, f_r2, layer, last_layer = False):
+        edge_coop = edge_coop.reshape(
+            (-1, self.mask_dim ** 2, self.latent_dim_pi))
+
+        coop_mask = th.unsqueeze(th.flatten(coop_mask, -2, -1), -2)
+
+        # print("decode coop edge")
+        # print(edge_coop.shape, coop_mask.shape, f_r1.shape, f_r2.shape)
+
+        f_r1 = th.unsqueeze(f_r1, -2).repeat(1, 1, self.mask_dim, 1).reshape(
+            (-1, self.mask_dim ** 2, f_r1.shape[-1]))
+        f_r2 = th.unsqueeze(f_r2, -3).repeat(1, self.mask_dim, 1, 1).reshape(
+            (-1, self.mask_dim ** 2, f_r2.shape[-1]))
+
+        # print(edge_coop.shape, f_r1.shape,f_r2.shape)
+        f = th.cat([f_r1, f_r2, edge_coop], dim=-1)
+
+        edge_coop = layer(f)
+        if not last_layer:
+            edge_coop = edge_coop.reshape((-1, self.mask_dim, self.mask_dim, self.latent_dim_pi))
+        return edge_coop
+
+    def decode_task_edge(self, edge_task, mask, f, layer, last_layer = False):
+        edge_task = edge_task.reshape(
+            (-1, self.mask_dim ** 2, self.latent_dim_pi))
+
+        task_mask = mask.transpose(-2, -1).matmul(mask)
+        task_mask = th.unsqueeze(th.flatten(task_mask, -2, -1), -2)
+
+        # print("decode task edge")
+        # print(edge_task.shape, task_mask.shape, f.shape)
+
+        f_r1 = th.unsqueeze(f, -2).repeat(1, 1, self.mask_dim, 1).reshape(
+            (-1, self.mask_dim ** 2, f.shape[-1]))
+        f_r2 = th.unsqueeze(f, -3).repeat(1, self.mask_dim, 1, 1).reshape(
+            (-1, self.mask_dim ** 2, f.shape[-1]))
+        f = th.cat([f_r1, f_r2, edge_task], dim=-1)
+
+        edge_task = layer(f)
+        if not last_layer:
+            edge_task = edge_task.reshape((-1, self.mask_dim, self.mask_dim, self.latent_dim_pi))
+        return edge_task
+    def forward(self, features: th.Tensor) -> th.Tensor:
+        edge_coop, coop_mask, f1, f2 = self.decode_feature(features)
+        mask1 = features["robot_1_task_edge_mask"]
+        mask2 = features["robot_2_task_edge_mask"]
+
+        action = self.calcul_action(f1, f2, mask1, mask2)
+        masked_action = self.mask_action(action)
+
+        critic = self.calcul_critic(f1, f2)
+        # print(f1,f2)
+        return masked_action, critic
+
+    def forward_actor(self, features: th.Tensor) -> th.Tensor:
+        edge_coop, coop_mask, f1, f2 = self.decode_feature(features)
+        mask1 = features["robot_1_task_edge_mask"]
+        mask2 = features["robot_2_task_edge_mask"]
+        action = self.calcul_action(f1, f2, mask1, mask2)
+        masked_action = self.mask_action(action)
+        return masked_action
+
+    def forward_critic(self, features: th.Tensor) -> th.Tensor:
+        edge_coop, coop_mask, f1, f2 = self.decode_feature(features)
+        critic = self.calcul_critic(f1, f2)
+        return critic
+    def calcul_action(self, f1, f2, mask1, mask2):
+
+        act1 = th.flatten(self.policy_net(f1), -2, -1)
+        act2 = th.flatten(self.policy_net(f2), -2, -1)
+        # print("act1:", act1.shape)
+
+        masked_act1 = F.softmax(act1.masked_fill(mask1 == 0, -1e9), dim=-1)
+        masked_act2 = F.softmax(act2.masked_fill(mask2 == 0, -1e9), dim=-1)
+        # masked_act1 = F.softmax(act1, dim=-1).masked_fill(mask1 == 0, 0)
+        # masked_act2 = F.softmax(act2, dim=-1).masked_fill(mask2 == 0, 0)
+
+        masked_action = th.cat([masked_act1, masked_act2], dim=-1)
+        # print("masked action:", masked_action.shape)
+        return masked_action
+
+    def calcul_critic(self, f1, f2):
+        cri1 = th.flatten(self.value_net_1(f1), -2, -1)
+        cri2 = th.flatten(self.value_net_1(f2), -2, -1)
+        # print(cri1.shape)
+
+        critic = th.cat([cri1, cri2], dim=-1)
+        # print(critic.shape)
+
+        critic = self.value_net_2(critic)
+        # print(critic.shape)
+
+        return critic
+    def mask_action(self, action):
+        return action
+
 #################################### custom feature extractor
 node_feature_dim = 24
 encode_latent_num_node = 64
@@ -1402,7 +1567,7 @@ class CustomFeatureExtractor(BaseFeaturesExtractor):
 
         extractors = {}
         extractors['robot_1_node_encoder'] = nn.Linear(self.node_feature_dim, encode_latent_num_node)
-        # extractors['robot_2_node_encoder'] = nn.Linear(self.node_feature_dim, encode_latent_num_node)
+        extractors['robot_2_node_encoder'] = nn.Linear(self.node_feature_dim, encode_latent_num_node)
 
         extractors['task_edge_encoder'] = nn.Linear(1, encode_latent_num_edge)
         extractors['coop_edge_encoder'] = nn.Linear(1, encode_latent_num_edge)
@@ -1436,7 +1601,7 @@ class CustomFeatureExtractor(BaseFeaturesExtractor):
         robot_2_node_tensor = th.cat(robot_2_node_tensor_list, dim=1)
 
         encoded_observation["robot_1_node"] = self.extractors['robot_1_node_encoder'](robot_1_node_tensor)
-        encoded_observation["robot_2_node"] = self.extractors['robot_1_node_encoder'](robot_2_node_tensor)
+        encoded_observation["robot_2_node"] = self.extractors['robot_2_node_encoder'](robot_2_node_tensor)
 
         return encoded_observation
 
@@ -1498,6 +1663,7 @@ class FakeNet(nn.Module):
         self.linear = None
 
     def forward(self, x):
+        # print(x)
         return x
 
 
@@ -1580,27 +1746,39 @@ class CustomCategoricalDistribution(CategoricalDistribution):
 #         output = th.cat((logits1, logits2), 1)
 #         return output
 #
-# class CustomDiagGaussianDistribution(DiagGaussianDistribution):
-#     def __init__(self, action_dim: int):
-#         super(CustomDiagGaussianDistribution, self).__init__(action_dim)
-#
-#         self.action_dim = action_dim
-#         self.mean_actions = None
-#         self.log_std = None
-#
-#     def proba_distribution_net(self, latent_dim: int, log_std_init: float = 0.0) -> Tuple[nn.Module, nn.Parameter]:
-#         """
-#         Create the layers and parameter that represent the distribution:
-#         one output will be the mean of the Gaussian, the other parameter will be the
-#         standard deviation (log std in fact to allow negative values)
-#         :param latent_dim: Dimension of the last layer of the policy (before the action layer)
-#         :param log_std_init: Initial value for the log standard deviation
-#         :return:
-#         """
-#         mean_actions = latent_dim#CustomMaskedLinearBox(latent_dim, self.action_dim)
-#         # TODO: allow action dependent std
-#         log_std = nn.Parameter(th.ones(self.action_dim) * log_std_init, requires_grad=True)
-#         return mean_actions, log_std
+class CustomDiagGaussianDistribution(DiagGaussianDistribution):
+    def __init__(self, action_dim: int):
+        super(CustomDiagGaussianDistribution, self).__init__(action_dim)
+
+        self.action_dim = action_dim
+        self.mean_actions = None
+        self.log_std = None
+    def proba_distribution_net(self, latent_dim: int, log_std_init: float = 0.0) -> Tuple[nn.Module, nn.Parameter]:
+        """
+        Create the layers and parameter that represent the distribution:
+        one output will be the mean of the Gaussian, the other parameter will be the
+        standard deviation (log std in fact to allow negative values)
+        :param latent_dim: Dimension of the last layer of the policy (before the action layer)
+        :param log_std_init: Initial value for the log standard deviation
+        :return:
+        """
+        mean_actions = FakeNet(latent_dim, self.action_dim)
+        # TODO: allow action dependent std
+        log_std = nn.Parameter(th.ones(self.action_dim) * log_std_init, requires_grad=True)
+        return mean_actions, log_std
+
+    def proba_distribution(
+            self, mean_actions: th.Tensor, log_std: th.Tensor
+    ):
+        """
+        Create the distribution given its parameters (mean, std)
+        :param mean_actions:
+        :param log_std:
+        :return:
+        """
+        action_std = th.ones_like(mean_actions) * log_std.exp()
+        self.distribution = Normal(mean_actions, action_std)
+        return self
 
 def make_custom_proba_distribution(
         action_space: gym.spaces.Space, use_sde: bool = False, dist_kwargs: Optional[Dict[str, Any]] = None
@@ -1621,11 +1799,10 @@ def make_custom_proba_distribution(
     elif isinstance(action_space, spaces.Discrete):
         return CustomCategoricalDistribution(action_space.n, **dist_kwargs), True
     elif isinstance(action_space, spaces.Box):
-        # assert len(action_space.shape) == 1, "Error: the action space must be a vector"
-        # cls = CustomDiagGaussianDistribution
-        # print(get_action_dim(action_space), cls(get_action_dim(action_space)))
-        # return cls(get_action_dim(action_space))
-        return None, False
+        assert len(action_space.shape) == 1, "Error: the action space must be a vector"
+        cls = CustomDiagGaussianDistribution
+        return cls(get_action_dim(action_space), **dist_kwargs), False
+        # return None, False
     else:
         raise NotImplementedError(
             "Error: probability distribution, not implemented for action space"

@@ -215,7 +215,9 @@ class CustomSubprocVecEnv(VecEnv):
 
     ####!!!!!!!!!!!!!!!!!!!!!!!!!!! my func end ###############################################
     def step_async(self, actions: np.ndarray) -> None:
+        # print("subproc:", actions)
         for remote, action in zip(self.remotes, actions):
+            # print("a",action)
             remote.send(("step", action))
         self.waiting = True
 

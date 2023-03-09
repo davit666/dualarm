@@ -38,7 +38,7 @@ from model_utils_task import (
 )
 
 
-def make_env(task_config, renders=True):
+def make_env(task_config, renders=False):
     def _init():
         task_allocator_reward_type = task_config["task_allocator_reward_type"]
         task_allocator_obs_type = task_config["task_allocator_obs_type"]
@@ -82,42 +82,54 @@ if __name__ == "__main__":
     cost_model_path = "../../generated_datas/good_models/cost/1203/1010_task_datas_100_epochs/norm_ee_only_succ_only_predict_step/512-512-512_ce_adam_rl1e-3_batch_512/2022-12-02-13-13-04/model_saved/2022-12-02-14-04-40.pth"
     mask_model_path = "../../generated_datas/good_models/mask/1203/1024_with_failure_task_datas_100_epochs/norm_ee_only_predict_succ/256-256-256_ce_adam_rl1e-3_batch_512/2022-12-02-11-47-26/model_saved/2022-12-02-12-29-48.pth"
 
-    print("!!!!!!!!!!!!!!!!!!!!!!!!!1")
+    # print("!!!!!!!!!!!!!!!!!!!!!!!!!1")
     #### load prediction model
-    prediction_model = (
-        Prediction_Model(obs_type=obs_type, cost_type=cost_type, cost_model_path=cost_model_path, mask_model_path=mask_model_path)
-        if use_prediction_model
-        else None
-    )
+    # prediction_model = (
+    #     Prediction_Model(obs_type=obs_type, cost_type=cost_type, cost_model_path=cost_model_path, mask_model_path=mask_model_path)
+    #     if use_prediction_model
+    #     else None
+    # )
+    # use_prediction_model = task_config["use_prediction_model"]
     # input_features, cost_features, mask_features = prediction_model.get_input_and_output()
 
     # input_shape = len(input_features)
     # cost_shape = len(cost_features)
     # mask_shape = len(mask_features)
+    
+    # env.load_prediction_model(prediction_model, input_type=obs_type, output_type=cost_type, use_prediction_model=use_prediction_model)
+
 
     ######################## test a full episode with prediction
-    use_prediction_model = task_config["use_prediction_model"]
-    env.load_prediction_model(prediction_model, input_type=obs_type, output_type=cost_type, use_prediction_model=use_prediction_model)
+   
+    
+   
+    # obs = env.reset()
+    # z_o = []
+    # z_a = []
+    # z_r = []
+    # z_d = []
+    # z_i = []
+    # count = 0
+    # z_o.append(obs)
+    # for i in range(10000):
+    #     acts = env.sample_action()
+    #     print(acts)
+    #     obs, rews, dones, infos = env.step(acts)
+    #     # print(obs['coop_edge_cost'])
+    #     count += 1
 
-    obs = env.reset()
-    z_o = []
-    z_a = []
-    z_r = []
-    z_d = []
-    z_i = []
-    for i in range(100):
-        acts = env.sample_action()
-        print(acts)
-        obs, rews, dones, infos = env.step(acts)
-
-        z_o.append(obs)
-        z_a.append(acts)
-        z_r.append(rews)
-        z_d.append(dones)
-        z_i.append(infos)
-        # print(i,acts)
-        if dones[0]:
-            break
+    #     z_o.append(obs)
+    #     z_a.append(acts)
+    #     z_r.append(rews)
+    #     z_d.append(dones)
+    #     z_i.append(infos)
+    #     # print(i,acts)
+    #     if dones[0]:
+    #         obs = env.reset()
+    #         print(count)
+    #         count = 0
+    #         break
+            
 
     ################ test feature extractor
     # from stable_baselines3.common.utils import get_device, is_vectorized_observation, obs_as_tensor
@@ -259,7 +271,7 @@ if __name__ == "__main__":
     #     print(state_info[k])
     #     print("\n")
 
-    ######################### test plot
+    ######################### test baselines
     # task_config["use_prediction_model"] = False
     # from gym_envs.baselines_pseudo_env_tasks import baselines_offline_heuristics, baseline_offline_brute_force, baseline_online_MCTS, calcul_cost
 
@@ -279,280 +291,436 @@ if __name__ == "__main__":
 
     # time0 = time.time()
     # parts_num = task_config["part_num"]
+    # loaded_task_datas = None
 
-    #### test prediction
+    # ### test prediction
     # obs = env.reset()
-    # action = env.sample_action()
-    # obs, r, done, info = env.step(action)
     # if task_config["use_prediction_model"]:
-    #     f, m0, p = env.get_data_for_offline_planning()
-    #     c, m = prediction_model.predict_data_for_offline_planning(f, m0)
+    #     obs = prediction_model.predict_data_for_online_planning(obs, predict_content=task_config['predict_content'])
+    #     data = [obs["coop_edges"], obs["coop_edge_mask"]]
+    #     env.update_prediction(data)
+    
+    # if task_config["use_prediction_model"]:
+    #     f, c0, m0, p = env.get_data_for_offline_planning()
+    #     c, m = prediction_model.predict_data_for_offline_planning(f, c0, m0, predict_content = task_config['predict_content'])
+    #     # obs = prediction_model.predict_data_for_online_planning(obs, predict_content=task_config['predict_content'])
     # else:
-    #     c, m, p = env.get_data_for_offline_planning()
-
-    ####
-    # obs = env.reset()
-    # c, m, p = env.get_data_for_offline_planning()
-    # baseline_function = baseline_online_MCTS
+    #     _, c, m, p = env.get_data_for_offline_planning()
+    
+    # baseline_function = baseline_offline_brute_force
     # # print("offline heuristic")
-    # # cost_GT, best_order_GT, t_GT = baseline_offline_brute_force(c, m, p)
+    # cost_GT, best_order_GT, t_GT = baseline_offline_brute_force(c, m, p)
     # cost, best_order, t = baseline_function(c, m, p)
-
     # cost2 = calcul_cost(c, m, p, best_order, show=True)
-
-    # while len(best_order) >= 2:
-    #     a = None
-    #     for p in best_order:
-    #         if a is None:
-    #             a = int(p)
-    #         else:
-    #             print("a:\t", int(a), int(p))
-    #             action = a * (parts_num + 1) + int(p)
-    #             action2 = env.sample_action()
-    #             print("a2:\t", action2[0] // (parts_num + 1), action2[0] % (parts_num + 1))
-    #             o, r, done, info = env.step(action)
-    #             a = None
-    #             c, m, p = env.get_data_for_offline_planning()
-    #             costx, best_order, t = baseline_function(c, m, p)
-    #             break
-    # # a = None
-    # # for p in best_order:
-    # #     if a is None:
-    # #         a = int(p)
-    # #     else:
-    # #         print("a:\t", int(a), int(p))
-    # #         action = a * (parts_num + 1) + int(p)
-    # #         action2 = env.sample_action()
-    # #         print("a2:\t", action2[0] // (parts_num + 1), action2[0] % (parts_num + 1))
-    # #         o, r, done, info = env.step(action)
-    # #         a = None
-
-    # action = (parts_num + 1) ** 2 - 1
-    # o, r, done, info = env.step(action)
-
-    # planner_cost = info["2_cost/accumulated_cost"]
-    # print("search cost:\t", cost)
-    # print("recalcul cost:\t", cost2)
-    # print("execution cost:\t", planner_cost)
-    # # print("GT cost:\t", cost_GT)
-    ####
-    # obs = env.reset()
-    # c, m, p = env.get_data_for_offline_planning()
-    # cost, best_order, t = baseline_online_MCTS(c, m, p, step=8)
     # a = None
     # for p in best_order:
     #     if a is None:
     #         a = int(p)
     #     else:
-
+    #         print("a:\t", int(a), int(p))
     #         action = a * (parts_num + 1) + int(p)
+    
+    #         # action2 = env.sample_action()
+    #         # print("a2:\t", action2[0] // (parts_num + 1), action2[0] % (parts_num + 1))
+    #         print("test", obs["cost_edges"][][0:3])
+            
     #         o, r, done, info = env.step(action)
+    #         print("done:",done)
+    #         if task_config["use_prediction_model"]:
+    #             obs = prediction_model.predict_data_for_online_planning(obs, predict_content=task_config['predict_content'])
+    #             data = [obs["coop_edges"], obs["coop_edge_mask"]]
+    #             env.update_prediction(data)
     #         a = None
+    
     # action = (parts_num + 1) ** 2 - 1
+    # env.prediction_updated = True
     # o, r, done, info = env.step(action)
+    
+    # planner_cost = info["2_cost/accumulated_cost"]
+    # print("search cost:\t", cost)
+    # print("recalcul cost:\t", cost2)
+    # print("execution cost:\t", planner_cost)
+    # print("GT cost:\t", cost_GT)
+
+    #####################################
+    from gym_envs.baselines_pseudo_env_tasks import baselines_offline_heuristics, baseline_offline_brute_force, baseline_online_MCTS, calcul_cost
+
+    env = Env_tasks(
+        task_config,
+        renders=False,
+        task_allocator_reward_type=task_allocator_reward_type,
+        task_allocator_obs_type=task_allocator_obs_type,
+        task_allocator_action_type=task_allocator_action_type,
+    )
+
+    prediction_model = (
+        Prediction_Model(obs_type=obs_type, cost_type=cost_type, cost_model_path=cost_model_path, mask_model_path=mask_model_path)
+        if task_config["use_prediction_model"]
+        else None
+    )
+    time0 = time.time()
+    parts_num = task_config["part_num"]
+    loaded_task_datas = None
+    
+    
+    
+    from load_pseudo_task_data import load_pseudo_task_datas, extract_pseudo_task_data
+    
+    if parts_num == 6:
+        task_data_path = "../../../../generated_datas/pseudo_task_datas/0227/6_part/mix/2023-02-27-11-50-12/"
+    elif parts_num == 8:
+        task_data_path = "../../../../generated_datas/pseudo_task_datas/0227/8_part/mix/2023-02-27-12-14-36/"
+    elif parts_num == 10:
+        task_data_path = "../../../../generated_datas/pseudo_task_datas/0227/10_part/mix/2023-02-27-12-20-08/"
+    elif parts_num == 12:
+        task_data_path = "../../../../generated_datas/pseudo_task_datas/0227/12_part/mix/2023-02-27-12-21-12/"
+    elif parts_num == 20:
+        task_data_path = "../../../../generated_datas/pseudo_task_datas/0227/20_part/mix/2023-02-27-12-23-03/"
+    else:
+        task_data_path = "../../../../generated_datas/pseudo_task_datas/0227/6_part/mix/2023-02-27-11-50-12/"
+    loaded_task_datas = load_pseudo_task_datas(task_data_path)
+    
+    
+    
+    # #####################################
+    
+    loop = 10000
+    cost_heuristics = [0]
+    cost_MCTS_6 = [0]
+    cost_MCTS_2 = [0]
+    cost_brute_force = [0]
+    cost_min_cost = [0]
+    cost_min_cost_recal = [0]
+
+    suss_heuristics = [0]
+    suss_MCTS_6 = [0]
+    suss_MCTS_2 = [0]
+    suss_brute_force = [0]
+    suss_min_cost = [0]
+    suss_min_cost_recal = [0]
+
+    num_heuristics = [0]
+    num_MCTS_6 = [0]
+    num_MCTS_2 = [0]
+    num_brute_force = [0]
+    num_min_cost = [0]
+    num_min_cost_recal = [0]
+
+    time_heuristics = [0]
+    time_MCTS_6 = [0]
+    time_MCTS_2 = [0]
+    time_brute_force = [0]
+    time_min_cost = [0]
+    time_collect_cost_and_mask = [0]
+
+    for l in range(loop):
+        time00 = time.time()
+        # load benchmark dataset
+        if loaded_task_datas is not None:
+            task_data = loaded_task_datas[l,:]
+        else:
+            task_data = None
+        
+        obs = env.reset(load_task_data = task_data)
+        if task_config["use_prediction_model"]:
+            f, c0, m0, p = env.get_data_for_offline_planning()
+            c, m = prediction_model.predict_data_for_offline_planning(f, c0, m0, predict_content = task_config['predict_content'])
+            # obs = prediction_model.predict_data_for_online_planning(obs, predict_content=task_config['predict_content'])
+        else:
+            _, c, m, p = env.get_data_for_offline_planning()
+        time_collect_cost_and_mask.append(time.time() - time00)
+        # c_s2n = c["n2n"][-1, :-1, -1, :-1]
+        # c = c_s2n + c["n"]
+        # obs_c = obs["coop_edge_cost"][:-1, :-1]
+        # check = obs_c - c
+        print("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
+        print("loop:\t", l + 1)
+        print("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
+
+        print("\n##############\n")
+        print("offline heuristic")
+        cost, best_order, t = baselines_offline_heuristics(c, m, p)
+
+        time_heuristics.append(t)
+        num_heuristics.append(len(best_order))
+
+        cost0 = calcul_cost(c, m, p, best_order)
+        print("recal:\t", cost0)
+
+        if cost0 < 100:
+            suss_heuristics.append(1)
+            cost_heuristics.append(cost)
+        else:
+            suss_heuristics.append(0)
+
+        print("\n##############\n")
+        print("offline brute force")
+        cost, best_order, t = baseline_offline_brute_force(c, m, p)
+        time_brute_force.append(t)
+        num_brute_force.append(len(best_order))
+
+        cost0 = calcul_cost(c, m, p, best_order)
+        print("recal:\t", cost0)
+
+        if cost0 < 100:
+            suss_brute_force.append(1)
+            cost_brute_force.append(cost)
+        else:
+            suss_brute_force.append(0)
+
+        print("\n##############\n")
+        print("online MCTS")
+        cost, best_order, t = baseline_online_MCTS(c, m, p)
+        time_MCTS_6.append(t)
+        num_MCTS_6.append(len(best_order))
+
+        cost0 = calcul_cost(c, m, p, best_order)
+        print("recal:\t", cost0)
+
+        if cost0 < 100:
+            suss_MCTS_6.append(1)
+            cost_MCTS_6.append(cost)
+        else:
+            suss_MCTS_6.append(0)
+
+        print("\n##############\n")
+        print("online MCTS_currstep")
+        cost, best_order, t = baseline_online_MCTS(c, m, p, step=2)
+        time_MCTS_2.append(t)
+        num_MCTS_2.append(len(best_order))
+
+        cost0 = calcul_cost(c, m, p, best_order)
+        print("recal:\t", cost0)
+
+        if cost0 < 100:
+            suss_MCTS_2.append(1)
+            cost_MCTS_2.append(cost)
+        else:
+            suss_MCTS_2.append(0)
+
+        print("\n##############\n")
+        print("online planner")
+        done = False
+        a = []
+        time_online = time.time()
+        while not done:
+            # print("before", obs["coop_edge_mask"])
+            if task_config["use_prediction_model"]:
+                obs = prediction_model.predict_data_for_online_planning(obs, predict_content=task_config['predict_content'])
+                env.update_prediction([obs["coop_edges"], obs["coop_edge_mask"]])
+            # print("after", obs["coop_edge_mask"])
+            action = env.sample_action()
+            # print(action // (parts_num + 1), action % (parts_num + 1))
+            obs, r, done, info = env.step(action)
+            if not done:
+                action = env.extract_allocator_action(action)
+                a.append(action[0])
+                a.append(action[1])
+        online_planner_cost = info["2_cost/accumulated_cost"]
+
+        print("cost:\t", online_planner_cost)
+        print("time used:\t", time.time() - time_online)
+        print("\n action order:")
+        print(a)
+        cost0 = calcul_cost(c, m, p, a)
+        print("re-calculate cost:\t", cost0)
+        time_min_cost.append(time.time() - time_online)
+        num_min_cost.append(len(a))
+
+        if cost0 < 100:
+            suss_min_cost.append(1)
+            cost_min_cost.append(online_planner_cost)
+            suss_min_cost_recal.append(1)
+            cost_min_cost_recal.append(online_planner_cost)
+
+        else:
+            suss_min_cost.append(0)
+            suss_min_cost_recal.append(0)
+
+        print("\n##############\n")
+        print("loop end")
+        print("loop total time:\t", time.time() - time00)
+
+    print("\n$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
+    print("evaluation end, time used:\t", time.time() - time0)
+    print("loop num:\t", loop)
+
+    data_c = {}
+    data_n = {}
+    data_s = {}
+    data_t = {}
+    data_c["heuristics"] = cost_heuristics
+    data_c["bruteforce"] = cost_brute_force
+    data_c["MCTS_6"] = cost_MCTS_6
+    data_c["MCTS_2"] = cost_MCTS_2
+    data_c["min_cost"] = cost_min_cost
+    data_c["min_cost_recal"] = cost_min_cost_recal
+
+    data_s["heuristics"] = suss_heuristics
+    data_s["bruteforce"] = suss_brute_force
+    data_s["MCTS_6"] = suss_MCTS_6
+    data_s["MCTS_2"] = suss_MCTS_2
+    data_s["min_cost"] = suss_min_cost
+    data_s["min_cost_recal"] = suss_min_cost_recal
+
+    data_n["heuristics"] = num_heuristics
+    data_n["bruteforce"] = num_brute_force
+    data_n["MCTS_6"] = num_MCTS_6
+    data_n["MCTS_2"] = num_MCTS_2
+    data_n["min_cost"] = num_min_cost
+
+    data_t["heuristics"] = time_heuristics
+    data_t["bruteforce"] = time_brute_force
+    data_t["MCTS_6"] = time_MCTS_6
+    data_t["MCTS_2"] = time_MCTS_2
+    data_t["min_cost"] = time_min_cost
+    data_t["collect_cost_and_mask"] = time_collect_cost_and_mask
+
+    data = {}
+    data["part_num"] = task_config["part_num"]
+    print("part_num:\t", data["part_num"])
+    for key in data_s:
+        data[key + "_suss_rate"] = sum(data_s[key]) / loop
+
+    for key in data_n:
+        data[key + "_num_parts"] = sum(data_n[key]) / loop
+
+    for key in data_c:
+        data[key + "_succ_cost"] = (sum(data_c[key]) / sum(data_s[key])) if sum(data_s[key]) > 0 else 0
+
+    for key in data_t:
+        data[key + "_search_time"] = sum(data_t[key]) / loop
+
+    for key in data:
+        print(key, ":\t", data[key])
+    
+    ############################## test errors
+    
+    # task_config["use_prediction_model"] = False
+    # parts_num = task_config["part_num"]
+    # task_data = loaded_task_datas[0,:]
+    
+    # from gym_envs.baselines_pseudo_env_tasks import baselines_offline_heuristics, baseline_offline_brute_force, baseline_online_MCTS, calcul_cost
+
+    # env = Env_tasks(
+    #     task_config,
+    #     renders=False,
+    #     task_allocator_reward_type=task_allocator_reward_type,
+    #     task_allocator_obs_type=task_allocator_obs_type,
+    #     task_allocator_action_type=task_allocator_action_type,
+    # )
+    # prediction_model = (
+    #     Prediction_Model(obs_type=obs_type, cost_type=cost_type, cost_model_path=cost_model_path, mask_model_path=mask_model_path)
+    #     if task_config["use_prediction_model"]
+    #     else None
+    # )
+    # use_prediction_model = task_config["use_prediction_model"]
+    
+       
+    # obs = env.reset(load_task_data = task_data)
+    # if task_config["use_prediction_model"]:
+    #     obs = prediction_model.predict_data_for_online_planning(obs, predict_content=task_config['predict_content'])
+    #     data = [obs["coop_edges"], obs["coop_edge_mask"]]
+    #     env.update_prediction(data)
+
+
+
+    # if task_config["use_prediction_model"]:
+    #     f, c0, m0, p = env.get_data_for_offline_planning()
+    #     c, m = prediction_model.predict_data_for_offline_planning(f, c0, m0, predict_content = task_config['predict_content'])
+    #     # obs = prediction_model.predict_data_for_online_planning(obs, predict_content=task_config['predict_content'])
+    # else:
+    #     _, c, m, p = env.get_data_for_offline_planning()
+
+
+
+    # baseline_function = baseline_offline_brute_force
+    # # print("offline heuristic")
+    # cost_GT, best_order_GT, t_GT = baseline_offline_brute_force(c, m, p)
+    # cost, best_order, t = baseline_function(c, m, p)
+    # cost2 = calcul_cost(c, m, p, best_order, show=True)
+    # best_order = list(best_order)
+    # best_order_GT = list(best_order_GT)   
+   
+    # z_o = []
+    # z_a = []
+    # z_r = []
+    # z_d = []
+    # z_i = []
+    # z_c = []
+    # count = 0
+    # done = False
+    # z_o.append(obs)
+    # z_c.append(c)
+    # lasta = parts_num
+    # lastb = parts_num
+    # for i in range(10000):
+    #     # get action
+    #     if  len(best_order) < 1:
+    #         a = -1
+    #         b = -1
+    #         action = (parts_num + 1) ** 2 -1
+    #     else:
+    #         a = best_order[0]
+    #         b = best_order[1]
+    #         action = a * (parts_num + 1) + int(b)
+    #         best_order.remove(a)
+    #         best_order.remove(b)
+        
+    #     print("in new step")
+    #     print("action:", a,b,lasta, lastb)
+    #     print("online:", obs["coop_edges"][a,b,1]/2,obs["coop_edges"][a,b,2]/2,obs["coop_edges"][a,b,0])
+    #     print("offline:", c["n2n"][lasta,a,lastb,b], c["n"][a,b], c["n2n"][lasta,a,lastb,b] + c["n"][a,b])
+    #     print(" ")
+        
+        
+    #     obs, rew, done, info = env.step(action)
+    #     if task_config["use_prediction_model"]:
+    #         obs = prediction_model.predict_data_for_online_planning(obs, predict_content=task_config['predict_content'])
+    #         data = [obs["coop_edges"], obs["coop_edge_mask"]]
+    #         env.update_prediction(data)
+        
+    #     if task_config["use_prediction_model"]:
+    #         f, c0, m0, p = env.get_data_for_offline_planning()
+    #         c, m = prediction_model.predict_data_for_offline_planning(f, c0, m0, predict_content = task_config['predict_content'])
+    #         # obs = prediction_model.predict_data_for_online_planning(obs, predict_content=task_config['predict_content'])
+    #     else:
+    #         _, c, m, p = env.get_data_for_offline_planning()
+        
+    #     count += 1
+
+    #     z_o.append(obs)
+    #     z_a.append(action)
+    #     z_r.append(rew)
+    #     z_d.append(done)
+    #     z_i.append(info)
+    #     z_c.append(c)
+    #     lasta = a
+    #     lastb = b
+        
+    #     if done :
+    #         obs = env.reset()
+    #         print("done , step count:", count)
+    #         count = 0
+    #         break
+        
+            
+
 
     # planner_cost = info["2_cost/accumulated_cost"]
-    # print("recalcul cost:\t", planner_cost)
-    #####################################
-    # loop = 20000
-    # cost_heuristics = [0]
-    # cost_MCTS_6 = [0]
-    # cost_MCTS_2 = [0]
-    # cost_brute_force = [0]
-    # cost_min_cost = [0]
-    # cost_min_cost_recal = [0]
+    # print("search cost:\t", cost)
+    # print("recalcul cost:\t", cost2)
+    # print("execution cost:\t", planner_cost)
+    # print("GT cost:\t", cost_GT)
 
-    # suss_heuristics = [0]
-    # suss_MCTS_6 = [0]
-    # suss_MCTS_2 = [0]
-    # suss_brute_force = [0]
-    # suss_min_cost = [0]
-    # suss_min_cost_recal = [0]
 
-    # num_heuristics = [0]
-    # num_MCTS_6 = [0]
-    # num_MCTS_2 = [0]
-    # num_brute_force = [0]
-    # num_min_cost = [0]
-    # num_min_cost_recal = [0]
 
-    # time_heuristics = [0]
-    # time_MCTS_6 = [0]
-    # time_MCTS_2 = [0]
-    # time_brute_force = [0]
-    # time_min_cost = [0]
-    # time_collect_cost_and_mask = [0]
 
-    # for l in range(loop):
-    #     time00 = time.time()
-    #     obs = env.reset()
-    #     if not task_config["use_prediction_model"]:
-    #         c, m, p = env.get_data_for_offline_planning()
-    #     else:
-    #         f, m0, p = env.get_data_for_offline_planning()
-    #         c, m = prediction_model.predict_data_for_offline_planning(f, m0)
-    #     time_collect_cost_and_mask.append(time.time() - time00)
-    #     # c_s2n = c["n2n"][-1, :-1, -1, :-1]
-    #     # c = c_s2n + c["n"]
-    #     # obs_c = obs["coop_edge_cost"][:-1, :-1]
-    #     # check = obs_c - c
-    #     print("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
-    #     print("loop:\t", l + 1)
-    #     print("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
 
-    #     # print("\n##############\n")
-    #     # print("offline heuristic")
-    #     # cost, best_order, t = baselines_offline_heuristics(c, m, p)
 
-    #     # time_heuristics.append(t)
-    #     # num_heuristics.append(len(best_order))
 
-    #     # cost0 = calcul_cost(c, m, p, best_order)
-    #     # print("recal:\t", cost0)
 
-    #     # if cost0 < 100:
-    #     #     suss_heuristics.append(1)
-    #     #     cost_heuristics.append(cost)
-    #     # else:
-    #     #     suss_heuristics.append(0)
 
-    #     # print("\n##############\n")
-    #     # print("offline brute force")
-    #     # cost, best_order, t = baseline_offline_brute_force(c, m, p)
-    #     # time_brute_force.append(t)
-    #     # num_brute_force.append(len(best_order))
 
-    #     # cost0 = calcul_cost(c, m, p, best_order)
-    #     # print("recal:\t", cost0)
 
-    #     # if cost0 < 100:
-    #     #     suss_brute_force.append(1)
-    #     #     cost_brute_force.append(cost)
-    #     # else:
-    #     #     suss_brute_force.append(0)
-
-    #     print("\n##############\n")
-    #     print("online MCTS")
-    #     cost, best_order, t = baseline_online_MCTS(c, m, p)
-    #     time_MCTS_6.append(t)
-    #     num_MCTS_6.append(len(best_order))
-
-    #     cost0 = calcul_cost(c, m, p, best_order)
-    #     print("recal:\t", cost0)
-
-    #     if cost0 < 100:
-    #         suss_MCTS_6.append(1)
-    #         cost_MCTS_6.append(cost)
-    #     else:
-    #         suss_MCTS_6.append(0)
-
-    #     print("\n##############\n")
-    #     print("online MCTS_currstep")
-    #     cost, best_order, t = baseline_online_MCTS(c, m, p, step=2)
-    #     time_MCTS_2.append(t)
-    #     num_MCTS_2.append(len(best_order))
-
-    #     cost0 = calcul_cost(c, m, p, best_order)
-    #     print("recal:\t", cost0)
-
-    #     if cost0 < 100:
-    #         suss_MCTS_2.append(1)
-    #         cost_MCTS_2.append(cost)
-    #     else:
-    #         suss_MCTS_2.append(0)
-
-    #     print("\n##############\n")
-    #     print("online planner")
-    #     done = False
-    #     a = []
-    #     time_online = time.time()
-    #     while not done:
-    #         # print("before", obs["coop_edge_mask"])
-    #         if task_config["use_prediction_model"]:
-    #             obs = prediction_model.predict_data_for_online_planning(obs)
-    #             env.update_prediction([obs["coop_edge_cost"], obs["coop_edge_mask"]])
-    #         # print("after", obs["coop_edge_mask"])
-    #         action = env.sample_action()
-    #         print(action // (parts_num + 1), action % (parts_num + 1))
-    #         obs, r, done, info = env.step(action)
-    #         if not done:
-    #             action = env.extract_allocator_action(action)
-    #             a.append(action[0])
-    #             a.append(action[1])
-    #     online_planner_cost = info["2_cost/accumulated_cost"]
-
-    #     print("cost:\t", online_planner_cost)
-    #     print("time used:\t", time.time() - time_online)
-    #     print("\n action order:")
-    #     print(a)
-    #     cost0 = calcul_cost(c, m, p, a)
-    #     print("re-calculate cost:\t", cost0)
-    #     time_min_cost.append(time.time() - time_online)
-    #     num_min_cost.append(len(a))
-
-    #     if cost0 < 100:
-    #         suss_min_cost.append(1)
-    #         cost_min_cost.append(online_planner_cost)
-    #         suss_min_cost_recal.append(1)
-    #         cost_min_cost_recal.append(online_planner_cost)
-
-    #     else:
-    #         suss_min_cost.append(0)
-    #         suss_min_cost_recal.append(0)
-
-    #     print("\n##############\n")
-    #     print("loop end")
-    #     print("loop total time:\t", time.time() - time00)
-
-    # print("\n$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
-    # print("evaluation end, time used:\t", time.time() - time0)
-    # print("loop num:\t", loop)
-
-    # data_c = {}
-    # data_n = {}
-    # data_s = {}
-    # data_t = {}
-    # data_c["heuristics"] = cost_heuristics
-    # data_c["bruteforce"] = cost_brute_force
-    # data_c["MCTS_6"] = cost_MCTS_6
-    # data_c["MCTS_2"] = cost_MCTS_2
-    # data_c["min_cost"] = cost_min_cost
-    # data_c["min_cost_recal"] = cost_min_cost_recal
-
-    # data_s["heuristics"] = suss_heuristics
-    # data_s["bruteforce"] = suss_brute_force
-    # data_s["MCTS_6"] = suss_MCTS_6
-    # data_s["MCTS_2"] = suss_MCTS_2
-    # data_s["min_cost"] = suss_min_cost
-    # data_s["min_cost_recal"] = suss_min_cost_recal
-
-    # data_n["heuristics"] = num_heuristics
-    # data_n["bruteforce"] = num_brute_force
-    # data_n["MCTS_6"] = num_MCTS_6
-    # data_n["MCTS_2"] = num_MCTS_2
-    # data_n["min_cost"] = num_min_cost
-
-    # data_t["heuristics"] = time_heuristics
-    # data_t["bruteforce"] = time_brute_force
-    # data_t["MCTS_6"] = time_MCTS_6
-    # data_t["MCTS_2"] = time_MCTS_2
-    # data_t["min_cost"] = time_min_cost
-    # data_t["collect_cost_and_mask"] = time_collect_cost_and_mask
-
-    # data = {}
-    # data["part_num"] = task_config["part_num"]
-    # print("part_num:\t", data["part_num"])
-    # for key in data_s:
-    #     data[key + "_suss_rate"] = sum(data_s[key]) / loop
-
-    # for key in data_n:
-    #     data[key + "_num_parts"] = sum(data_n[key]) / loop
-
-    # for key in data_c:
-    #     data[key + "_succ_cost"] = (sum(data_c[key]) / sum(data_s[key])) if sum(data_s[key]) > 0 else 0
-
-    # for key in data_t:
-    #     data[key + "_search_time"] = sum(data_t[key]) / loop
-
-    # for key in data:
-    #     print(key, ":\t", data[key])
+    

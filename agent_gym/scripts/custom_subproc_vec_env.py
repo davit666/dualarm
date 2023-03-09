@@ -6,6 +6,8 @@ import gym
 import numpy as np
 import torch
 
+from load_pseudo_task_data import extract_pseudo_task_data
+
 from stable_baselines3.common.vec_env.base_vec_env import (
     CloudpickleWrapper,
     VecEnv,
@@ -39,6 +41,9 @@ def _worker(
                 observation = env.reset()
                 remote.send(observation)
             ################## my code
+            elif cmd == "reset_with_task_data":
+                observation = env.reset(data)
+                remote.send(observation)
             elif cmd == "sample_action":
                 sampled_action = env.sample_action()
                 remote.send(sampled_action)
@@ -53,6 +58,9 @@ def _worker(
                 d['m'] = m
                 d['p'] = p
                 remote.send(d)
+            elif cmd == "get_current_task_data":
+                data = env.get_current_task_data()
+                remote.send(data)
             #################
             elif cmd == "render":
                 remote.send(env.render(data))
@@ -138,8 +146,8 @@ class CustomSubprocVecEnv(VecEnv):
 
         return np.stack(acts)
 
-    def load_prediction_model(self, model, input_type=None, output_type=None, use_prediction_model = True):
-
+    def load_prediction_model(self, model, input_type=None, output_type=None, use_prediction_model=True, predict_content = "both"):
+        self.predict_content = predict_content
         self.use_prediction_model = use_prediction_model
         if use_prediction_model:
             self.prediction_model_loaded = True
@@ -153,16 +161,15 @@ class CustomSubprocVecEnv(VecEnv):
             self.cost_shape = len(cost_features)
             self.mask_shape = len(mask_features)
 
-
         return self.prediction_model_loaded
-
 
     def predict_cost_and_mask(self, obs):
         assert self.prediction_model_loaded
 
         prediction_inputs = obs["prediction_inputs"]
-        unpred_cost = obs["coop_edge_cost"]
+        unpred_cost = obs["coop_edges"]
         unpred_mask = obs["coop_edge_mask"]
+        edge_shape = unpred_cost.shape[:-1]
 
         prediction_inputs_shape = prediction_inputs.shape
         #
@@ -173,40 +180,74 @@ class CustomSubprocVecEnv(VecEnv):
         pred_mask = self.prediction_model.predict_mask(X).cpu().detach()  # .numpy()
         pred_mask[:, :, -1] = 1
 
-        # pred_cost = torch.reshape(pred_cost, pred_cost.shape[:-1])
+        if self.predict_content in ["cost_only", "only_cost", "cost"]:
+            # do not update mask
+            pred_mask1 = unpred_mask.copy()
+            pred_mask2 = unpred_mask.copy()
+            pred_mask0 = unpred_mask.copy()
+        else:
+            # mask update
+            pred_mask1 = pred_mask[:, 0, :].reshape(edge_shape).numpy().astype(np.float32)
+            pred_mask2 = pred_mask[:, 1, :].reshape(edge_shape).numpy().astype(np.float32)
+            pred_mask0 = torch.multiply(pred_mask[:, 0, :], pred_mask[:, 1, :]).reshape(edge_shape).numpy().astype(
+                np.float32)
 
-        pred_cost = torch.sum(pred_cost, 1).reshape(unpred_cost.shape).numpy().astype(np.float32)
-        pred_mask = torch.multiply(pred_mask[:, 0, :], pred_mask[:, 1, :]).reshape(unpred_mask.shape).numpy().astype(np.float32)
+            pred_mask1 = np.multiply(pred_mask1, unpred_mask)
+            pred_mask2 = np.multiply(pred_mask2, unpred_mask)
+            pred_mask0 = np.multiply(pred_mask0, unpred_mask)
 
-        # print("pred_cost.shape", pred_cost.shape)
-        # print("pred_mask.shape", pred_mask.shape)
+            mask_terminate = pred_mask0[:, :-1, :-1].sum(axis=-2).sum(axis=-1)
+            mask_terminate = mask_terminate < 1
 
-        obs["coop_edge_mask"] = np.multiply(pred_mask, unpred_mask)
-        # print("before",obs["coop_edge_mask"])
-        mask_terminate = obs["coop_edge_mask"][:,:-1,:-1].sum(axis = -2).sum(axis = -1)
-        # print("mask_termination",mask_terminate)
-        mask_terminate = mask_terminate < 1
-        # print("mask_termination", mask_terminate)
+            pred_mask1[:, -1, -1] = mask_terminate
+            pred_mask2[:, -1, -1] = mask_terminate
+            pred_mask0[:, -1, -1] = mask_terminate
 
-        obs["coop_edge_mask"][:,-1,-1] = mask_terminate
-        # print("after",obs["coop_edge_mask"])
+        obs["coop_edge_mask"] = pred_mask0
+        # print("m1", pred_mask1)
+        # print("m2", pred_mask2)
+        # print("m0", pred_mask0)
 
 
-        obs["coop_edge_cost"] = np.multiply(pred_cost, obs["coop_edge_mask"]) + np.multiply(unpred_cost,
-                                                                                            1 - obs["coop_edge_mask"])
+        if self.predict_content in ["mask_only", "only_mask", "mask"]:
+            # donot update cost
+            pred_cost1 = unpred_cost[:, :, :, 1]
+            pred_cost2 = unpred_cost[:, :, :, 2]
+            pred_cost0 = unpred_cost[:, :, :, 0]
+        else:
+            # cost update
+            pred_cost1 = pred_cost[:, 0, :].reshape(edge_shape).numpy().astype(np.float32) / 500
+            pred_cost2 = pred_cost[:, 1, :].reshape(edge_shape).numpy().astype(np.float32) / 500
+            pred_cost2[:,-1,-1] = 0
+            pred_cost0 = (pred_cost1 + pred_cost2) / 2
 
-        obs["coop_edge_cost"] = obs["coop_edge_cost"] / 1000
+        pred_cost1 = np.multiply(pred_cost1, pred_mask1) + np.multiply(np.ones(edge_shape), 1 - pred_mask1)
+        pred_cost2 = np.multiply(pred_cost2, pred_mask2) + np.multiply(np.ones(edge_shape), 1 - pred_mask2)
+        pred_cost0 = np.multiply(pred_cost0, pred_mask0) + np.multiply(np.ones(edge_shape), 1 - pred_mask0)
+        # print(pred_cost2)
+        ############################  experiment: coop edge
+        pred_cost = np.stack([pred_cost0, pred_cost1, pred_cost2,  pred_mask0, pred_mask1, pred_mask2], axis=-1)
+        # pred_cost = np.stack([pred_cost0, pred_cost1, pred_cost2], axis=-1)
+        # pred_cost = np.stack([pred_cost0, pred_mask0], axis=-1)
+        # pred_cost = np.stack([pred_cost0], axis=-1)
+        ############################  experiment: coop edge
+        # print(pred_mask0, pred_cost)
+        obs["coop_edges"] = pred_cost
+        # print("1", pred_cost1)
+        # print("2", pred_cost2)
+        # print("0", pred_cost0)
 
         return obs
 
     def update_cost_and_mask(self, obs):
-        for remote,cost,mask in zip(self.remotes, obs['coop_edge_cost'], obs['coop_edge_mask']):
-            remote.send(("update_prediction", [cost,mask]))
+        for remote, cost, mask in zip(self.remotes, obs['coop_edges'], obs['coop_edge_mask']):
+            remote.send(("update_prediction", [cost, mask]))
 
         obs = [remote.recv() for remote in self.remotes]
         obs = _flatten_obs(obs, self.observation_space)
 
         return obs
+
     def get_data_for_offline_planning(self):
         for remote in self.remotes:
             remote.send(("get_data_for_offline_planning", None))
@@ -256,7 +297,34 @@ class CustomSubprocVecEnv(VecEnv):
         #######################3
 
         return obs
+    def reset_with_task_data(self, load_task_data = None) -> VecEnvObs:
+        if load_task_data is not None:
+            assert load_task_data.shape[0] == len(self.remotes)
+            for remote, data in zip(self.remotes, load_task_data):
+                remote.send(("reset_with_task_data", data))
+            obs = [remote.recv() for remote in self.remotes]
+        else:
+            for remote in self.remotes:
+                remote.send(("reset", None))
+            obs = [remote.recv() for remote in self.remotes]
 
+        ######## my code ######
+        obs = _flatten_obs(obs, self.observation_space)
+        if self.use_prediction_model:
+            obs = self.predict_cost_and_mask(obs)
+            obs = self.update_cost_and_mask(obs)
+
+        #######################3
+
+        return obs
+    def get_current_task_data(self):
+
+        for remote in self.remotes:
+            remote.send(("get_current_task_data", None))
+        data = [remote.recv() for remote in self.remotes]
+        data = np.stack(data)
+
+        return data
     def close(self) -> None:
         if self.closed:
             return

@@ -27,7 +27,7 @@ from bullet_env.p_utils import (
     remove_obstacles
 )
 from bullet_env import tools
-from bullet_env.plot import Robot_Triangle_Plot
+# from bullet_env.plot import Robot_Triangle_Plot
 
 largeValObservation = np.inf  ###############
 

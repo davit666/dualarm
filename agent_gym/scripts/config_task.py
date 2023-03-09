@@ -6,26 +6,97 @@ class TaskConfig:
 
     load_model = False
     load_model_path = 'test_models/' + env_name
-    # load_model_path += '/1228/share_para_low_depth_12parts_20M_mask_termination_norm_cost/RT_NP_CM_MT/SCAttNE4_2_layer_128_cat_coop_edge/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2022-12-28-22-26-04'
-    # load_model_path += '/1231/share_para_high_att_depth_12parts_20M_mask_termination_norm_cost/RT_NP_CM_MT/EdgeAttentionWithNodeEncoding_64/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2022-12-31-22-08-03'
-    # load_model_path += '/0102/share_para_high_att_depth_6parts_12M_mask_termination_norm_cost/RT_P_CM_MT/EdgeAttentionWithNodeEncoding_64/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-01-02-23-54-29'
-    # load_model_path += '/0102/share_para_high_att_depth_6parts_12M_mask_termination_norm_cost_penalty_R/RT_P_CM_MT/EdgeAttentionWithNodeEncoding_64/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-01-02-23-17-06'
-    load_model_path += '/0103/share_para_high_att_depth_6parts_12M_mask_termination_norm_cost_penalty_R/RT_NP_CM_MT-AC5/EdgeAttentionWithNodeEncoding_64/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-01-03-21-25-43/model_at_step_13499784'
-    # load_model_path += "/model_at_step_7999872" #"/model_at_step_9999840"  # "/model_at_step_18999696"  #
-    ######## model ########
-    use_custom_network = True
+    # baselines from 0224
+    # load_model_path += '/0224/baseline-reward1_4parts_20M_linear_lr_3e-4/RT_NP_CM/NET0220-baseline/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-02-24-17-06-29'
+    # load_model_path += '/0224/baseline-reward1_4parts_20M_linear_lr_3e-4/RT_P_CM/NET0220-baseline/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-02-24-17-04-53'
 
-    model_date = env_name + "/monitoring4/" + time.strftime("%m%d")
-    custom_network_type = "EdgeAttentionWithNodeEncoding3_64"  # "SCAttNE_3_layer_cat_coop_edge"#"custom_self_cross_attention_edge"#"custom_flatten_all"#"custom_flatten_node"#
-    model_name = "box_fix_sample_mask_type2_r_1_4parts_20M__lr3e-4" \
-                 + "/RT_NP_CM_MT"
+    # ablation for obs in 0224
+    # load_model_path += '/0224/no_node_static_obs-reward1_4parts_20M_linear_lr_3e-4/RT_NP_CM/NET0220-baseline/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-02-24-17-09-01'
+    # load_model_path += '/0224/no_edge_mask_obs-reward1_4parts_20M_linear_lr_3e-4/RT_NP_CM/NET0220-baseline/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-02-24-17-11-17'
+    # load_model_path += '/0224/short_coop_edge_obs-reward1_4parts_20M_linear_lr_3e-4/RT_NP_CM/NET0220-baseline/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-02-24-17-13-53'
+
+    # experiment in 0228 for reward design
+    # load_model_path += '/0228/baseline-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-02-28-17-02-34'
+    # load_model_path += '/0228/no-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-02-28-17-04-23'
+    # load_model_path += '/0228/fix-penalty-no-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-02-28-17-07-54'
+    # load_model_path += '/0228/no-step-no-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-02-28-17-06-38'
+
+    # ablation for short train (10M) in 0228
+    # load_model_path += '/0301/short-train-test-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-01-11-59-54'
+    # load_model_path += '/0301/short-train-test-small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-01-12-00-22'
+
+    # ablation for minimum obs and penalty tuning
+    # load_model_path += '/0228/large-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220-minimum_obs/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-02-28-19-56-39'
+    # load_model_path += '/0228/middle-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220-minimum_obs/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-02-28-19-57-16'
+    # load_model_path += '/0228/small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220-minimum_obs/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-02-28-19-57-47'
+
+    # ablation for reward shaping 2 in 0301
+    # load_model_path += '/0301/small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-01-19-34-32'
+    # load_model_path += '/0301/tiny-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-01-19-35-04'
+    # load_model_path += '/0301/small-bonus-no-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-01-19-35-58'
+    # load_model_path += '/0301/no-bonus-no-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-01-19-37-13'
+
+    # ablation for reward shaping 3 in 0303
+    # load_model_path += '/0302/small-bonus-small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-02-15-11-11'
+    # load_model_path += '/0302/no-step-small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-02-15-12-18'
+    # load_model_path += '/0302/no-bomus-small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-02-16-11-02'
+    # load_model_path += '/0302/no-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-02-16-12-08'
+
+    # ablation for partial predictive in 0303
+    # load_model_path += '/0302/only_predict_cost-small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-02-19-29-07'
+    # load_model_path += '/0302/only_predict_mask-small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-02-19-29-54'
+
+    # reward ablation 4 in 0303
+    # load_model_path += '/0303/reward-ablaion-4/no-step-no-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-03-09-58-34'
+    # load_model_path += '/0303/reward-ablaion-4/normal-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-03-10-00-09'
+    # load_model_path += '/0303/reward-ablaion-4/normal-bonus-normal-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-03-10-55-18'
+    # load_model_path += '/0303/reward-ablaion-4/normal-bonus-no-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-03-11-01-07'
+
+    # ablation input in 0304
+    # load_model_path += '/0303/input-ablation/baselines-small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_NP_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-03-16-40-38'
+
+    # load_model_path += '/0303/input-ablation/least-encoder-obs-small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-03-16-33-02'
+    # load_model_path += '/0303/input-ablation/least-decoder-obs-small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-03-16-33-57'
+
+    # ablation mask constraint in 0304
+    # load_model_path += '/0303/mask-constraint/neighbour_index-small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_NP_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-04-19-45-19'
+    # load_model_path += '/0303/mask-constraint/pose_overlap-small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_NP_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-04-19-46-04'
+    # load_model_path += '/0303/mask-constraint/triangle_overlap-small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_NP_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-04-19-46-43'
+    # load_model_path += '/0303/mask-constraint/random_number-small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_NP_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-04-19-47-43'
+
+    # ablation input in 0306
+    # load_model_path += '/0306/input-ablation/encoder-no-static-obs-small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-06-18-43-19'
+    # load_model_path += '/0306/input-ablation/encoder-no-dynamic-obs-small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-06-18-43-38'
+    # load_model_path += '/0306/input-ablation/decoder-short-obs-small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-06-18-46-39'
+
+    # baselines middle task in 0307
+    # load_model_path += '/0307/middle-num-tasks/small-penalty-reward_10parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-06-10-19-34'
+    # load_model_path += '/0307/middle-num-tasks/small-penalty-reward_10parts_20M_lr_3e-4_linear/RT_NP_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-06-10-21-15'
+
+    # ablation middle task reward in 0307
+    # load_model_path += '/0307/middle-num-tasks/normal-bonus-normal-penalty-reward_10parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-07-09-30-45'
+    # load_model_path += '/0307/middle-num-tasks/normal-bonus-no-penalty-reward_10parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-07-09-31-25'
+
+
+    load_model_path += "/model_at_the_end" #  "/model_at_step_17500000"  # "/model_at_step_18999696"  #
+    ######## model ########
+    use_custom_network = False
+
+    model_date = env_name + "/monitoringx/" + time.strftime("%m%d")
+    custom_network_type = "NET0220"  # "SCAttNE_3_layer_cat_coop_edge"#"custom_self_cross_attention_edge"#"custom_flatten_all"#"custom_flatten_node"#
+    model_name = "input-ablation/encoder-short-robot-obs-small-penalty-reward_6parts_20M_lr_3e-4_linear" \
+                 + "/RT_P_CM"
 
     alg_name = "PPO"
     task_allocator_reward_type = "negative_normalized_cost_with_sparse_success_bonus"
     task_allocator_obs_type = "common_dict_obs"
-    task_allocator_action_type = "Box"#"Discrete"  # "MultiDiscrete"
+    task_allocator_action_type = "Discrete"  # "Box"#"MultiDiscrete"
 
-    use_prediction_model = False
+    use_prediction_model = True
+    predict_content = ""  #"cost_only" #"both"#  "mask_only" #
+
+    use_mask_constraint = False
+    mask_constraint = "random_number"   #"neighbour_index" # "pose_overlap"# "triangle_overlap" # "random_number"
 
     ####### prediction model ########
     #### define input output type to use
@@ -36,7 +107,7 @@ class TaskConfig:
     mask_model_path = "../../generated_datas/good_models/mask/1203/1024_with_failure_task_datas_100_epochs/norm_ee_only_predict_succ/256-256-256_ce_adam_rl1e-3_batch_512/2022-12-02-11-47-26/model_saved/2022-12-02-12-29-48.pth"
 
     ######## env config ########
-    part_num = 4
+    part_num = 6
 
     fix_box_sample = True
     mask_done_task = False
@@ -46,7 +117,7 @@ class TaskConfig:
     task_type = "random"
     dynamic_task = False
 
-    max_cost_const = 1000
+    max_cost_const = 500
     global_success_bonus = 1
     reward_scale = 5
 
@@ -61,18 +132,18 @@ class TaskConfig:
     beltBaseColor = [0.75, 0.75, 0.75, 1]
 
     ######## save & log ########
-    log_path = "../../log_datas/"
+    log_path = "../../../../log_datas/"
     save_path = "../models_saved/"
     model_save_freq = 5e5
 
     ######## cpu ########
     num_cpu = 24
     ######## lr scheduler ########
-    use_lr_scheduler = False
+    use_lr_scheduler = True
     ######## parameter ########
     learning_rate = 3e-4
     n_steps = 2048
-    batch_size = 2048
+    batch_size = 512
     n_epochs = 10
 
     total_timesteps = 2e7
@@ -98,6 +169,9 @@ def load_config():
     task_config['task_allocator_action_type'] = T.task_allocator_action_type
 
     task_config['use_prediction_model'] = T.use_prediction_model
+    task_config['predict_content'] = T.predict_content
+    task_config['use_mask_constraint'] = T.use_mask_constraint
+    task_config['mask_constraint'] = T.mask_constraint
     task_config['default_rest_pose'] = T.default_rest_pose
 
     task_config['log_path'] = T.log_path

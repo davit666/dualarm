@@ -14,7 +14,7 @@ class PseudoPart():
     def __init__(self):
         self.success_dist_threshold = 0.1
         self.sucking_space = 0.075
-        self.lift_height = 0.1
+        self.lift_height = 0.125
         self.part_size = np.array([0.5, 0.1, 0.05])
 
         self.init_pos = None
@@ -38,7 +38,7 @@ class PseudoPart():
     def resetInitPose(self, pos, orn, reset_by_ee_pose=False):
         self.init_pos = pos
         self.init_orn = orn
-        self.init_pos[2] += self.part_size[2] / 2.0 + self.sucking_space + self.lift_height
+        self.init_pos[2] += self.part_size[2] / 2.0 + self.sucking_space + self.lift_height + (np.random.random() - 0.5) / 50.
 
         self.init_pose = np.concatenate([self.init_pos, p.getEulerFromQuaternion(self.init_orn)[-1:]])
 
@@ -48,21 +48,31 @@ class PseudoPart():
     def resetGoalPose(self, pos, orn):
         self.goal_pos = pos
         self.goal_orn = orn
-        self.goal_pos[2] += self.part_size[2] / 2.0 + self.sucking_space + self.lift_height
+        self.goal_pos[2] += self.part_size[2] / 2.0 + self.sucking_space + self.lift_height + (np.random.random() - 0.5) / 50.
 
         self.goal_pose = np.concatenate([self.goal_pos, p.getEulerFromQuaternion(self.goal_orn)[-1:]])
 
+    def load_part_data(self, p_data):
+        init = p_data['init']
+        goal = p_data['goal']
+
+        self.init_pose = init.copy()
+        self.goal_pose = goal.copy()
+        self.pose = self.init_pose.copy()
+
+        return True
+
     def getPose(self):
         assert self.pose is not None
-
         pose =np.array(self.pose.copy())
-
         return pose
     def getGoalPose(self):
         assert self.goal_pose is not None
-
         pose = np.array(self.goal_pose.copy())
-
+        return pose
+    def getInitPose(self):
+        assert self.init_pose is not None
+        pose = np.array(self.init_pose.copy())
         return pose
 
     # def picked(self, robot):
@@ -100,7 +110,7 @@ class PseudoRobot:
             from robot_config.kawasaki_config import KAWASAKI
             self.robot_config = KAWASAKI()
 
-        print(self.robot_config)
+        # print(self.robot_config)
         assert self.robot_config is not None
 
         self.path = self.urdfRootPath + self.robot_config.path
@@ -142,8 +152,8 @@ class PseudoRobot:
         self.setup()
 
     def setup(self):
-        print(self.urdfRootPath)
-        print(self.path)
+        # print(self.urdfRootPath)
+        # print(self.path)
 
         self.resetInitPose(default_pose=True)
 
@@ -169,6 +179,8 @@ class PseudoRobot:
 
         self.resetGoalPose(goal_pos, default_pose=default_goal_pose)
         self.resetInitPose(default_pose=True)
+        self.init_pose = self.goal_pose.copy()
+        self.current_pose = self.init_pose.copy()
         # self.init_JS_pos = self.getObservation_JS()
         self.sucking = False
         self.is_success = False
@@ -189,7 +201,19 @@ class PseudoRobot:
         # ee = self.getObservation_EE()
 
         return True
+    def load_robot_data(self, r_data):
+        init = r_data['init']
+        goal = r_data['goal']
 
+        self.init_EE_pos = np.concatenate((init[:3], p.getQuaternionFromEuler([0,0,init[-1]]))) if self.useInverseKinematics else init.copy()
+        self.init_pose = init.copy() if self.useInverseKinematics else self.init_EE_pos.copy()
+
+        self.goal_EE_pos = np.concatenate((goal[:3], p.getQuaternionFromEuler([0,0,goal[-1]]))) if self.useInverseKinematics else goal.copy()
+        self.goal_pose = goal.copy() if self.useInverseKinematics else self.goal_EE_pos.copy()
+
+        self.current_pose = self.init_pose.copy()
+
+        return True
     def resetInitPose(self, init_pose=None, default_pose=True):
         if default_pose:
             self.init_EE_pos = self.default_goal_pose.copy()
@@ -210,6 +234,7 @@ class PseudoRobot:
             self.goal_EE_pos = self.default_goal_pose.copy()
             self.goal_EE_pos[0] += (np.random.random() - 0.5) / 10.
             self.goal_EE_pos[1] += (np.random.random() - 0.5) / 10.
+            self.goal_EE_pos[2] += (np.random.random() - 0.5) / 50.
             self.goal = np.concatenate((self.goal_EE_pos[:3], p.getEulerFromQuaternion(self.goal_EE_pos[3:])[
                                                               -1:])) if self.useInverseKinematics else self.goal_EE_pos
         elif goal_pose is not None:
@@ -242,12 +267,22 @@ class PseudoRobot:
     # def normalize_JS(self, js):
     #     return None
 
+    def getBase(self):
+        base_pos = self.BasePos
+        base_orn = self.BaseOrn
+
+        base_pose = np.array([base_pos[0], base_pos[1], base_pos[2] - 0.01, base_orn[-1]])
+        return base_pose
+
     #### apply action ####
     def getActionDimension(self):
         return 4
 
     def applyAction(self, target_pose):
+        # print(self.robot_name)
+        # print("before:", self.getObservation_EE())
         self.current_pose = target_pose.copy()
+        # print("after:", self.getObservation_EE())
         return self.getObservation_EE()
 
     # def calculStraightAction2Goal(self, target_pose, type="ee", commands_scale=None):

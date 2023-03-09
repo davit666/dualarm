@@ -82,7 +82,7 @@ def get_best_pairs(cost_n, mask_n, avai_parts):
                 min_cost = cost
                 best_pairs = pairs.copy()
                 best_pairs.append(p)
-    #             print("update", min_cost,best_pairs)
+                # print("update", min_cost,best_pairs)
     # print("out",min_cost, best_pairs, len(avai_parts))
     return min_cost, best_pairs
 
@@ -102,33 +102,31 @@ def get_best_order(cost_n2n, mask_n2n, best_pairs, curr_pose):
         # print("out end", c, (-1,-1), curr_pose)
         return c, best_order
     else:
-        # perm = permutations(best_pairs)
+        perm_pairs = permutations(best_pairs, 1)
         min_cost = punish_cost
-        for pairs in best_pairs:
-            # print("pairs, \t", pairs[0], pairs[1])
-            perm = permutations(pairs, 2)
-            for pair in perm:
-                # print("pair,",pair)
-                # pair = p[0]
-                target_x = pair[0]
-                target_y = pair[1]
-                c = cost_n2n[curr_x, target_x, curr_y, target_y]
-                m = mask_n2n[curr_x, target_x, curr_y, target_y]
-                # print("c", c)
-                if m == 0:
-                    continue
+        for  p_pair in perm_pairs:
+            pair = p_pair[0]
+            # print("pair \t", pair[0], pair[1]) *
+            target_x = pair[0]
+            target_y = pair[1]
+            c = cost_n2n[curr_x, target_x, curr_y, target_y]
+            m = mask_n2n[curr_x, target_x, curr_y, target_y]
+            # print("c", c)
+            if m == 0:
+                continue
 
-                pairs_left = best_pairs.copy()
-                pairs_left.remove(pairs)
-                future_c, order = get_best_order(cost_n2n, mask_n2n, pairs_left, pair)
-                # print("back", future_c, order)
-                cost = c + future_c
+            pairs_left = best_pairs.copy()
+            pairs_left.remove(pair)
+            future_c, order = get_best_order(cost_n2n, mask_n2n, pairs_left, pair)
+            # print("back", future_c, order)
+            cost = c + future_c
 
-                if cost < min_cost:
-                    min_cost = cost
-                    best_order = order.copy()
-                    best_order.append(pair)
-                    # print("!!!!!!!!!!!!!1update", cost,best_order, curr_pose, c)
+            if cost < min_cost:
+                min_cost = cost
+                best_order = order.copy()
+                best_order.append(pair)
+                # print("!!!!!!!!!!!!!1update", cost,best_order, curr_pose, c)
+
     # print("out",min_cost, best_order, len(best_pairs))
 
     return min_cost, best_order
@@ -224,7 +222,7 @@ def get_cost_of_order(cost_node, cost_node2node, mask_node, mask_node2node, orde
                 print("not available, fail solution")
             return max_cost
         if show:
-            print("cost:\t", c1, c2)
+            print("pick&place cost:\t", c2, c1)
         cost += c1 + c2
 
         x0 = x
@@ -232,6 +230,7 @@ def get_cost_of_order(cost_node, cost_node2node, mask_node, mask_node2node, orde
         i += 2
     if go_back:
         if show:
+            print("go back")
             print("go back, cost:\t", cost_node2node[x0, -1, y0, -1])
         cost += cost_node2node[x0, -1, y0, -1]
     if show:

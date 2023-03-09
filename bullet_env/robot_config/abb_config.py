@@ -37,5 +37,5 @@ class ABB():
     init_pos2_y = [-0.75, 0.5]
     init_pos2_z = [0.55, 0.6]
 
-    default_ee_pose = [sum(init_pos2_x) / 2, init_pos2_y[0], init_pos2_z[1], 0, 0, 0, 1]
+    default_ee_pose = [sum(init_pos2_x) / 2, init_pos2_y[0], (init_pos2_z[0] + init_pos2_z[1]) / 2, 0, 0, 0, 1]
 

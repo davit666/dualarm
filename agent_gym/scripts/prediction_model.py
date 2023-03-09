@@ -158,44 +158,87 @@ class Prediction_Model():
         pred_mask = (pred_mask == 0).type(torch.float)  # .item()
         return pred_mask
 
-    def predict_data_for_online_planning(self, obs):
+    def predict_data_for_online_planning(self, obs, predict_content = "both"):
         prediction_inputs = obs["prediction_inputs"]
-        unpred_cost = obs["coop_edge_cost"]
+        unpred_cost = obs["coop_edges"]
         unpred_mask = obs["coop_edge_mask"]
-
-        prediction_inputs_shape = prediction_inputs.shape
+        edge_shape = unpred_cost.shape[:-1]
 
         X = torch.tensor(prediction_inputs).to(self.device)
         pred_cost = self.predict_cost(X).cpu().detach()  # .numpy()
         pred_mask = self.predict_mask(X).cpu().detach()  # .numpy()
-        # print(pred_cost.shape, pred_mask.shape)
         pred_mask[:, -1] = 1
 
-        pred_cost = torch.sum(pred_cost, -2).reshape(unpred_cost.shape).numpy().astype(np.float32)
-        pred_mask = torch.multiply(pred_mask[0, :], pred_mask[1, :]).reshape(unpred_mask.shape).numpy().astype(
-            np.float32)
 
-        obs["coop_edge_mask"] = np.multiply(pred_mask, unpred_mask)
-        # print("before",obs["coop_edge_mask"])
-        mask_terminate = obs["coop_edge_mask"][:-1, :-1].sum(axis=-2).sum(axis=-1)
-        # print("mask_termination",mask_terminate)
-        mask_terminate = mask_terminate < 1
-        # print("mask_termination", mask_terminate)
+        if predict_content in  ["cost_only", "only_cost", "cost"]:
+            # donot update mask
+            pred_mask1 = unpred_mask.copy()
+            pred_mask2 = unpred_mask.copy()
+            pred_mask0 = unpred_mask.copy()
 
-        obs["coop_edge_mask"][-1, -1] = mask_terminate
-        # print("after",obs["coop_edge_mask"])
-        obs["coop_edge_cost"] = np.multiply(pred_cost, obs["coop_edge_mask"]) + np.multiply(unpred_cost,
-                                                                                            1 - obs["coop_edge_mask"])
-        obs["coop_edge_cost"] = obs["coop_edge_cost"] / 1000
+        else:
+            # update mask
+            pred_mask1 = pred_mask[0, :].reshape(edge_shape).numpy().astype(np.float32)
+            pred_mask2 = pred_mask[1, :].reshape(edge_shape).numpy().astype(np.float32)
+            pred_mask0 = torch.multiply(pred_mask[0, :], pred_mask[1, :]).reshape(edge_shape).numpy().astype(
+                np.float32)
+
+            pred_mask1 = np.multiply(pred_mask1, unpred_mask)
+            pred_mask2 = np.multiply(pred_mask2, unpred_mask)
+            pred_mask0 = np.multiply(pred_mask0, unpred_mask)
+
+            mask_terminate = pred_mask0[:-1, :-1].sum(axis=-2).sum(axis=-1)
+            mask_terminate = mask_terminate < 1
+
+            pred_mask1[-1, -1] = mask_terminate
+            pred_mask2[-1, -1] = mask_terminate
+            pred_mask0[-1, -1] = mask_terminate
+
+        obs["coop_edge_mask"] = pred_mask0
+
+        # print("m1", pred_mask1)
+        # print("m2", pred_mask2)
+        # print("m0", pred_mask0)
+
+        if predict_content in ["mask_only", "only_mask", "mask"]:
+            # donot update cost
+            pred_cost1 = unpred_cost[:, :, 1]
+            pred_cost2 = unpred_cost[:, :, 2]
+            pred_cost0 = unpred_cost[:, :, 0]
+        else:
+            # cost update
+            pred_cost1 = pred_cost[0, :].reshape(edge_shape).numpy().astype(np.float32) / 500
+            pred_cost2 = pred_cost[1, :].reshape(edge_shape).numpy().astype(np.float32) / 500
+            pred_cost2[-1, -1] = 0
+            pred_cost0 = (pred_cost1 + pred_cost2) / 2
+
+        pred_cost1 = np.multiply(pred_cost1, pred_mask1) + np.multiply(np.ones(edge_shape), 1 - pred_mask1)
+        pred_cost2 = np.multiply(pred_cost2, pred_mask2) + np.multiply(np.ones(edge_shape), 1 - pred_mask2)
+        pred_cost0 = np.multiply(pred_cost0, pred_mask0) + np.multiply(np.ones(edge_shape), 1 - pred_mask0)
+        # print(pred_cost2)
+        ############################  experiment: coop edge
+        pred_cost = np.stack([pred_cost0, pred_cost1, pred_cost2, pred_mask0, pred_mask1, pred_mask2], axis=-1)
+        # pred_cost = np.stack([pred_cost0, pred_cost1, pred_cost2], axis=-1)
+        # pred_cost = np.stack([pred_cost0, pred_mask0], axis=-1)
+        # pred_cost = np.stack([pred_cost0], axis=-1)
+        ############################  experiment: coop edge
+        # print(pred_mask0, pred_cost)
+        obs["coop_edges"] = pred_cost
+        # print("1", pred_cost1)
+        # print("2", pred_cost2)
+        # print("0", pred_cost0)
 
         return obs
-    def predict_data_for_offline_planning(self, feature, mask):
+    def predict_data_for_offline_planning(self, feature, cost, mask, predict_content = 'both'):
+        print("check   ",predict_content )
         feature_n = feature['n']
         feature_n2n = feature['n2n']
+        unpred_cost_n = cost['n']
+        unpred_cost_n2n = cost['n2n']
         mask_n = mask['n']
         mask_n2n = mask['n2n']
         feature_dim = feature['dim']
-        max_cost = feature['max_cost']
+        max_cost = 500 #feature['max_cost']
         part_num = feature['part_num']
 
         # print(feature_n.shape, feature_n2n.shape,mask_n.shape, mask_n2n.shape)
@@ -204,9 +247,6 @@ class Prediction_Model():
         f_n2n = torch.tensor(feature_n2n).reshape((part_num + 1) * (part_num + 1), (part_num + 1) * (part_num + 1),
                                                   feature_dim).to(self.device)
 
-        # m_n = torch.tensor(mask_n).reshape((part_num) * (part_num), 1).to(self.device)
-        # m_n2n = torch.tensor(mask_n2n).reshape((part_num + 1) * (part_num + 1), (part_num + 1) * (part_num + 1),
-        #                                        1).to(self.device)
 
         # print(f_n.shape, f_n2n.shape)
 
@@ -224,22 +264,42 @@ class Prediction_Model():
 
         # print("predicted:\t",pred_cost_n.shape, pred_cost_n2n.shape, pred_mask_n.shape, pred_mask_n2n.shape)
 
-        pred_cost_n = pred_cost_n.cpu().detach().numpy().reshape(mask_n.shape)
+        pred_cost_n = pred_cost_n.cpu().detach().numpy().reshape(mask_n.shape) / max_cost
         pred_mask_n = pred_mask_n.cpu().detach().numpy().reshape(mask_n.shape)
-        pred_cost_n2n = pred_cost_n2n.cpu().detach().numpy().reshape(mask_n2n.shape)
+        pred_cost_n2n = pred_cost_n2n.cpu().detach().numpy().reshape(mask_n2n.shape)/ max_cost
         pred_mask_n2n = pred_mask_n2n.cpu().detach().numpy().reshape(mask_n2n.shape)
 
         # print("shaped:\t", pred_cost_n.shape, pred_cost_n2n.shape, pred_mask_n.shape, pred_mask_n2n.shape)
-        pred_mask_n = np.multiply(pred_mask_n,mask_n)
-        pred_cost_n = np.multiply(pred_cost_n,pred_mask_n) / max_cost + (1 - pred_mask_n)
 
-        pred_mask_n2n = np.multiply(pred_mask_n2n, mask_n2n)
-        pred_cost_n2n = np.multiply(pred_cost_n2n, pred_mask_n2n) / max_cost + (1 - pred_mask_n2n)
+        if predict_content in ["cost_only", "only_cost", "cost"]:
+            # not update mask
+            pred_mask_n = mask_n.copy()
+            pred_mask_n2n = mask_n2n.copy()
+        else:
+            # update mask
+            pred_mask_n = np.multiply(pred_mask_n, mask_n)
+            pred_mask_n2n = np.multiply(pred_mask_n2n, mask_n2n)
 
-        # print("customed:\t", pred_cost_n.shape, pred_cost_n2n.shape, pred_mask_n.shape, pred_mask_n2n.shape)
+        for j1 in range(part_num):
+            for j2 in range(part_num):
+                if j1 != j2:
+                    pred_mask_n2n[j1, part_num, j2, part_num] = 1
 
 
+        if predict_content in ["mask_only", "only_mask", "mask"]:
+            # not update cost
+            pred_cost_n = unpred_cost_n.copy()
+            pred_cost_n2n = unpred_cost_n2n
+        else:
+            # update cost
+            pred_cost_n = np.multiply(pred_cost_n, pred_mask_n) + (1 - pred_mask_n)
+            pred_cost_n2n = np.multiply(pred_cost_n2n, pred_mask_n2n) + (1 - pred_mask_n2n)
+            ##### norm cost
+            pred_cost_n2n = pred_cost_n2n / 2
+            pred_cost_n = pred_cost_n / 2
 
+
+        ##### norm cost
         c = {}
         m ={}
         c['n'] = pred_cost_n

@@ -7,14 +7,12 @@ os.sys.path.insert(0, parentdir)
 
 import time
 
-
 # from stable_baselines3.common.policies import MlpPolicy
 
 from stable_baselines3 import PPO, A2C, SAC
 from stable_baselines3.common.callbacks import CheckpointCallback, CallbackList
 import torch
 from torchinfo import summary
-
 
 from train_utils import CallbackEpisodeMetrics, linear_schedule
 from model_utils_task import CustomActorCriticPolicy
@@ -26,6 +24,7 @@ from prediction_model import Prediction_Model, get_features, NeuralNetwork
 from custom_subproc_vec_env import CustomSubprocVecEnv
 
 from model_utils_task import CustomActorCriticPolicy
+from load_pseudo_task_data import load_pseudo_task_datas, extract_pseudo_task_data
 
 
 def make_env(task_config, renders=False):
@@ -60,8 +59,9 @@ if __name__ == "__main__":
     num_cpu = task_config["num_cpu"]
     part_num = task_config["part_num"]
 
-    load_model = task_config["load_model"]
+    load_model = True#task_config["load_model"]
     load_model_path = task_config["load_model_path"]
+    loaded_task_datas = None
 
     ############ load prediction model
     cost_type = task_config["cost_type"]
@@ -72,7 +72,8 @@ if __name__ == "__main__":
     use_prediction_model = task_config["use_prediction_model"]
     #### load prediction model
     prediction_model = (
-        Prediction_Model(obs_type=obs_type, cost_type=cost_type, cost_model_path=cost_model_path, mask_model_path=mask_model_path)
+        Prediction_Model(obs_type=obs_type, cost_type=cost_type, cost_model_path=cost_model_path,
+                         mask_model_path=mask_model_path)
         if use_prediction_model
         else None
     )
@@ -82,7 +83,8 @@ if __name__ == "__main__":
     num_cpu = 1
 
     env = CustomSubprocVecEnv([make_env(task_config) for i in range(num_cpu)])
-    env.load_prediction_model(prediction_model, input_type=obs_type, output_type=cost_type, use_prediction_model=use_prediction_model)
+    env.load_prediction_model(prediction_model, input_type=obs_type, output_type=cost_type,
+                              use_prediction_model=use_prediction_model, predict_content=task_config['predict_content'])
 
     # if not use_prediction_model:
     #     del prediction_model
@@ -95,12 +97,29 @@ if __name__ == "__main__":
         policy.policy.action_space = env.action_space
         policy.policy.mlp_extractor.mask_dim = task_config["part_num"] + 1
     ################## evaluate many episodes and get average
-    from gym_envs.baselines_pseudo_env_tasks import baselines_offline_heuristics, baseline_offline_brute_force, baseline_online_MCTS, calcul_cost
+    from gym_envs.baselines_pseudo_env_tasks import baselines_offline_heuristics, baseline_offline_brute_force, \
+        baseline_online_MCTS, calcul_cost
 
     use_baseline = "min_cost_sample"  # "min_cost_sample"
     baseline_function = baseline_online_MCTS
 
-    loop = 1000
+    #######
+    if part_num == 6:
+        task_data_path = "../../../../generated_datas/pseudo_task_datas/0227/6_part/mix/2023-02-27-11-50-12/"
+    elif part_num == 8:
+        task_data_path = "../../../../generated_datas/pseudo_task_datas/0227/8_part/mix/2023-02-27-12-14-36/"
+    elif part_num == 10:
+        task_data_path = "../../../../generated_datas/pseudo_task_datas/0227/10_part/mix/2023-02-27-12-20-08/"
+    elif part_num == 12:
+        task_data_path = "../../../../generated_datas/pseudo_task_datas/0227/12_part/mix/2023-02-27-12-21-12/"
+    elif part_num == 20:
+        task_data_path = "../../../../generated_datas/pseudo_task_datas/0227/20_part/mix/2023-02-27-12-23-03/"
+    else:
+        task_data_path = "../../../../generated_datas/pseudo_task_datas/0227/6_part/mix/2023-02-27-11-50-12/"
+
+    loaded_task_datas = load_pseudo_task_datas(task_data_path)
+    #######
+    loop = 10000
     succ_num = 0
     early_finish_num = 0
     step_early_finish = []
@@ -118,8 +137,15 @@ if __name__ == "__main__":
     wrong_allocation_rate = []
     time0 = time.time()
     for l in range(loop):
+        if loaded_task_datas is not None:
+            start_idx = l * num_cpu
+            end_idx = (l + 1) * num_cpu
+            task_data = loaded_task_datas[start_idx:end_idx, :]
+
+            obs = env.reset_with_task_data(load_task_data=task_data)
+        else:
+            obs = env.reset()
         count_while = 0
-        obs = env.reset()
         done = False
         while not done:
             count_while += 1

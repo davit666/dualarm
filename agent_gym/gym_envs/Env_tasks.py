@@ -254,15 +254,15 @@ class Env_tasks(gym.GoalEnv):
         goal_poses_base = [[-0.7, -0.5], [-0.7, 0], [-0.7, 0.5], [0.7, -0.5], [0.7, 0], [0.7, 0.5]]
         init_poses_base = [[-0.25, -0.5], [-0.25, 0], [-0.25, 0.5], [0.25, -0.5], [0.25, 0], [0.25, 0.5]]
 
-        global_poses_base = goal_poses_base + init_poses_base
-        random.shuffle(global_poses_base)
-        init_poses_base = global_poses_base[:self.parts_num]
-        goal_poses_base = global_poses_base[self.parts_num:]
+        # global_poses_base = goal_poses_base + init_poses_base
+        # random.shuffle(global_poses_base)
+        # init_poses_base = global_poses_base[:self.parts_num]
+        # goal_poses_base = global_poses_base[self.parts_num:]
 
         random.shuffle(goal_poses_base)
         random.shuffle(init_poses_base)
         ######################################################
-        if np.random.random() < 0.5:
+        if np.random.random() < 0:
             all_poses_base = goal_poses_base + init_poses_base
             random.shuffle(all_poses_base)
             init_poses_base = all_poses_base[:self.parts_num]

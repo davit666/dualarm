@@ -1,8 +1,6 @@
 import matplotlib
 import numpy as np
-import cv2
 import matplotlib.pyplot as plt
-import matplotlib.tri as mtri
 import time
 from tools import check_point_in_line_segment, check_is_triangle
 

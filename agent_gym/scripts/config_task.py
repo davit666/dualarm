@@ -64,10 +64,12 @@ class TaskConfig:
     # load_model_path += '/0303/mask-constraint/triangle_overlap-small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_NP_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-04-19-46-43'
     # load_model_path += '/0303/mask-constraint/random_number-small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_NP_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-04-19-47-43'
 
-    # ablation input in 0306
+    # ablation input in 0306 & 0308
     # load_model_path += '/0306/input-ablation/encoder-no-static-obs-small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-06-18-43-19'
     # load_model_path += '/0306/input-ablation/encoder-no-dynamic-obs-small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-06-18-43-38'
     # load_model_path += '/0306/input-ablation/decoder-short-obs-small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-06-18-46-39'
+    # load_model_path += '/0308/input-ablation/encoder-no-static-obs-small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-08-17-59-44'
+    # load_model_path += '/0308/input-ablation/encoder-short-robot-obs-small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-08-18-01-09'
 
     # baselines middle task in 0307
     # load_model_path += '/0307/middle-num-tasks/small-penalty-reward_10parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-06-10-19-34'
@@ -77,14 +79,20 @@ class TaskConfig:
     # load_model_path += '/0307/middle-num-tasks/normal-bonus-normal-penalty-reward_10parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-07-09-30-45'
     # load_model_path += '/0307/middle-num-tasks/normal-bonus-no-penalty-reward_10parts_20M_lr_3e-4_linear/RT_P_CM/NET0220/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-07-09-31-25'
 
+    # ablation net arch in 0309-0312
+    # load_model_path += '/0309/Net-Arch/small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/Flatten/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-09-16-29-43'
+    # load_model_path += '/0309/Net-Arch/small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/Only_Coop/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-09-16-30-53'
+    # load_model_path += '/0309/Net-Arch/small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/Only_Decoder/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-09-16-35-11'
+    # load_model_path += '/0312/Net-Arch/small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/Without_TaskEdge/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-12-20-00-17'
+    load_model_path += '/0312/Net-Arch/small-penalty-reward_6parts_20M_lr_3e-4_linear/RT_P_CM/Upgrade_Output/PPO_negative_normalized_cost_with_sparse_success_bonus_norm_ee_only_Discrete_2023-03-12-20-02-00'
 
     load_model_path += "/model_at_the_end" #  "/model_at_step_17500000"  # "/model_at_step_18999696"  #
     ######## model ########
     use_custom_network = False
 
     model_date = env_name + "/monitoringx/" + time.strftime("%m%d")
-    custom_network_type = "NET0220"  # "SCAttNE_3_layer_cat_coop_edge"#"custom_self_cross_attention_edge"#"custom_flatten_all"#"custom_flatten_node"#
-    model_name = "input-ablation/encoder-short-robot-obs-small-penalty-reward_6parts_20M_lr_3e-4_linear" \
+    custom_network_type = "Upgrade_Output"  # "SCAttNE_3_layer_cat_coop_edge"#"custom_self_cross_attention_edge"#"custom_flatten_all"#"custom_flatten_node"#
+    model_name = "Net-Arch/small-penalty-reward_6parts_20M_lr_3e-4_linear" \
                  + "/RT_P_CM"
 
     alg_name = "PPO"

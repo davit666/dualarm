@@ -981,7 +981,7 @@ class CustomNetwork_EdgeAttention(nn.Module):
         return critic
 
 
-from multi_head_attention import MultiHeadSelfCrossAttentionWithNodeAndEdge3, MultiHeadAttention2
+from multi_head_attention import MultiHeadSelfCrossAttentionWithNodeAndEdge3
 class CustomNetwork_EdgeAttentionWithNodeEncoding(CustomNetwork_EdgeAttention):
     """
     this network use self attention to decode node and task edge features

@@ -7,7 +7,26 @@ from torch import nn
 from stable_baselines3.common.policies import ActorCriticPolicy
 import torch.nn.functional as F
 
-
+############################  experiment: node state obs
+part_node_feature_dim = 22
+# part_node_feature_dim = 12
+############################  experiment: node state obs
+############################  experiment: rest node
+reset_node_feature_dim = 15
+# reset_node_feature_dim = 9
+############################  experiment: rest node
+############################  experiment: task edge
+task_edges_feature_dim = 3
+# task_edges_feature_dim = 2
+############################  experiment: task edge
+############################  experiment: coop edge
+coop_edges_feature_dim = 6
+# coop_edges_feature_dim = 3
+# coop_edges_feature_dim = 2
+# coop_edges_feature_dim = 1
+############################  experiment: coop edge
+encode_latent_num_node = 64
+encode_latent_num_edge = 64
 ############################# custom AC policy
 
 class CustomActorCriticPolicy0220(ActorCriticPolicy):
@@ -50,8 +69,13 @@ class CustomActorCriticPolicy0220(ActorCriticPolicy):
         self._build(lr_schedule)
 
     def _build_mlp_extractor(self) -> None:
-        self.mlp_extractor = CustomNetwork_0220(self.node_features_dim, self.mask_dim,
-                                                discrete_action_space=self.discrete_action_space)
+        # self.mlp_extractor = CustomNetwork_0220(self.node_features_dim, self.mask_dim, discrete_action_space=self.discrete_action_space)
+        # self.mlp_extractor = CustomNetwork_WithoutTaskEdge(self.node_features_dim, self.mask_dim, discrete_action_space=self.discrete_action_space)
+        # self.mlp_extractor = CustomNetwork_OnlyDecoder(self.node_features_dim, self.mask_dim, discrete_action_space=self.discrete_action_space)
+        # self.mlp_extractor = CustomNetwork_OnlyCoopEdges(self.node_features_dim, self.mask_dim, discrete_action_space=self.discrete_action_space)
+        # self.mlp_extractor = CustomNetwork_Flatten(self.node_features_dim, self.mask_dim, discrete_action_space=self.discrete_action_space)
+        # self.mlp_extractor = CustomNetwork_UpgradeOutput(self.node_features_dim, self.mask_dim, discrete_action_space=self.discrete_action_space)
+        self.mlp_extractor = CustomNetwork_2020_Add_MinusCost(self.node_features_dim, self.mask_dim, discrete_action_space=self.discrete_action_space)
 
 
 ####################################3 custom actor critic network
@@ -86,7 +110,7 @@ class CustomNetwork_0220(nn.Module):
         self.mask_dim = mask_dim
         self.discrete_action_space = discrete_action_space
         # Save output dimensions, used to create the distributions
-        self.latent_dim_pi = self.mask_dim * 2
+        self.latent_dim_pi = self.mask_dim ** 2
         self.latent_dim_vf = 64
         self.head_num = 8
         self.setup()
@@ -126,6 +150,8 @@ class CustomNetwork_0220(nn.Module):
         mask2 = features["robot_2_task_edge_mask"]
 
         edge_coop = features["coop_edges"]
+
+        coop_cost = features['coop_edge_cost']
         coop_mask = features["coop_edge_mask"]
 
         ###############################
@@ -148,16 +174,19 @@ class CustomNetwork_0220(nn.Module):
         ############ cat or add #############
         c_mask = coop_mask.reshape(
             (-1, self.mask_dim ** 2, 1))
+
+        c_cost = coop_cost.reshape(
+            (-1, self.mask_dim ** 2, 1))
         # print(f.shape, c_mask.shape)
         # print(f_r1.shape, edge_r1.shape, mask1.shape)
-        return f, c_mask
+        return f, c_mask, c_cost
 
-    def decode(self, features, mask):
+    def decode(self, features, mask, cost):
         features = self.action_decoder_1(features, features, features, mask=mask)
         features = self.action_decoder_2(features, features, features, mask=mask)
         return features
 
-    def calcul_action(self, features, mask):
+    def calcul_action(self, features, mask, cost):
         action = th.flatten(self.policy_net(features), -2, -1)
         mask = th.flatten(mask, -2, -1)
         # print(action.shape, mask.shape)
@@ -170,47 +199,29 @@ class CustomNetwork_0220(nn.Module):
         return self.value_net_2(critic)
 
     def forward(self, features):
-        features, action_mask = self.encode(features)
-        features = self.decode(features, action_mask)
+        features, action_mask, action_cost = self.encode(features)
+        features = self.decode(features, action_mask, action_cost)
 
-        action = self.calcul_action(features, action_mask)
+        action = self.calcul_action(features, action_mask, action_cost)
         critic = self.calcul_critic(features)
         return action, critic
 
     def forward_actor(self, features):
-        features, action_mask = self.encode(features)
-        features = self.decode(features, action_mask)
-        action = self.calcul_action(features, action_mask)
+        features, action_mask, action_cost = self.encode(features)
+        features = self.decode(features, action_mask, action_cost)
+        action = self.calcul_action(features, action_mask, action_cost)
         return action
 
     def forward_critic(self, features):
-        features, action_mask = self.encode(features)
-        features = self.decode(features, action_mask)
+        features, action_mask, action_cost = self.encode(features)
+        features = self.decode(features, action_mask, action_cost)
         critic = self.calcul_critic(features)
         return critic
 
 
+
+
 #################################### custom feature extractor
-############################  experiment: node state obs
-part_node_feature_dim = 22
-# part_node_feature_dim = 12
-############################  experiment: node state obs
-############################  experiment: rest node
-reset_node_feature_dim = 15
-# reset_node_feature_dim = 9
-############################  experiment: rest node
-############################  experiment: task edge
-task_edges_feature_dim = 3
-# task_edges_feature_dim = 2
-############################  experiment: task edge
-############################  experiment: coop edge
-coop_edges_feature_dim = 6
-# coop_edges_feature_dim = 3
-# coop_edges_feature_dim = 2
-# coop_edges_feature_dim = 1
-############################  experiment: coop edge
-encode_latent_num_node = 64
-encode_latent_num_edge = 64
 
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
@@ -269,6 +280,7 @@ class CustomFeatureExtractor(BaseFeaturesExtractor):
             elif "coop_edges" in key:
                 coop_edge_obs = obs.reshape([obs.shape[0], obs.shape[1], obs.shape[2], coop_edges_feature_dim])
                 encoded_observation[key] = self.extractors['coop_edge_encoder'](coop_edge_obs)
+                encoded_observation['coop_edge_cost'] = coop_edge_obs[:,:,:,0]
 
         robot_1_part_node_tensor = th.cat(robot_1_part_node_tensor_list, dim=1)
         robot_2_part_node_tensor = th.cat(robot_2_part_node_tensor_list, dim=1)
@@ -421,3 +433,324 @@ def make_custom_proba_distribution(
             f"of type {type(action_space)}."
             " Must be of type Gym Spaces: Box, Discrete, MultiDiscrete or MultiBinary."
         )
+######################################################33
+
+########################### custom networks
+
+# custom net 2020 : without task edge obs
+class CustomNetwork_WithoutTaskEdge(CustomNetwork_0220):
+
+    def setup(self):
+        self.robot1_node_encoder_1 = MultiHeadAttention(self.feature_dim, self.head_num, self.feature_dim)
+        self.robot1_node_encoder_2 = MultiHeadAttention(self.feature_dim, self.head_num, self.feature_dim)
+
+        self.robot2_node_encoder_1 = MultiHeadAttention(self.feature_dim, self.head_num, self.feature_dim)
+        self.robot2_node_encoder_2 = MultiHeadAttention(self.feature_dim, self.head_num, self.feature_dim)
+
+        ##########################################33
+        self.action_decoder_1 = MultiHeadAttention(self.feature_dim * 3, self.head_num, self.feature_dim)
+        self.action_decoder_2 = MultiHeadAttention(self.feature_dim, self.head_num, 16)
+
+        self.policy_net = nn.Linear(16, 1)
+
+        self.value_net_1 = nn.Linear(16, 4)
+        self.value_net_2 = nn.Sequential(
+            nn.Linear(self.mask_dim ** 2 * 4, self.latent_dim_vf)
+        )
+
+    def encode(self, features):
+        f_r1 = features["robot_1_node"]
+        f_r2 = features["robot_2_node"]
+        # return f_r1, f_r2
+
+        edge_r1 = features["robot_1_task_edges"]
+        edge_r2 = features["robot_2_task_edges"]
+
+        mask1 = features["robot_1_task_edge_mask"]
+        mask2 = features["robot_2_task_edge_mask"]
+
+        edge_coop = features["coop_edges"]
+
+        coop_cost = features['coop_edge_cost']
+        coop_mask = features["coop_edge_mask"]
+
+        ###############################
+        f_r1 = self.robot1_node_encoder_1(f_r1, f_r1, f_r1, mask=mask1)
+        f_r1 = self.robot1_node_encoder_2(f_r1, f_r1, f_r1, mask=mask1)
+
+        f_r2 = self.robot2_node_encoder_1(f_r2, f_r2, f_r2, mask=mask2)
+        f_r2 = self.robot2_node_encoder_2(f_r2, f_r2, f_r2, mask=mask2)
+        ###############################
+        edge_coop = edge_coop.reshape(
+            (-1, self.mask_dim ** 2, self.feature_dim))
+        f_r1 = th.unsqueeze(f_r1, -2).repeat(1, 1, self.mask_dim, 1).reshape(
+            (-1, self.mask_dim ** 2, self.feature_dim))
+        f_r2 = th.unsqueeze(f_r2, -3).repeat(1, self.mask_dim, 1, 1).reshape(
+            (-1, self.mask_dim ** 2, self.feature_dim))
+
+        ############ cat or add #############
+        f = th.cat([f_r1, f_r2, edge_coop], dim=-1)
+        # f = f_r1 + f_r2 + edge_coop
+        ############ cat or add #############
+        c_mask = coop_mask.reshape(
+            (-1, self.mask_dim ** 2, 1))
+        c_cost = coop_cost.reshape(
+            (-1, self.mask_dim ** 2, 1))
+
+        # print(f.shape, c_mask.shape)
+        # print(f_r1.shape, edge_r1.shape, mask1.shape)
+        return f, c_mask, c_cost
+#####################################################################################3
+# custom net 2020 : only decoder
+class CustomNetwork_OnlyDecoder(CustomNetwork_0220):
+    def setup(self):
+        ##########################################33
+        self.action_decoder_1 = MultiHeadAttention(self.feature_dim * 3, self.head_num, self.feature_dim)
+        self.action_decoder_2 = MultiHeadAttention(self.feature_dim, self.head_num, 16)
+
+        self.policy_net = nn.Linear(16, 1)
+
+        self.value_net_1 = nn.Linear(16, 4)
+        self.value_net_2 = nn.Sequential(
+            nn.Linear(self.mask_dim ** 2 * 4, self.latent_dim_vf)
+        )
+
+    def encode(self, features):
+        f_r1 = features["robot_1_node"]
+        f_r2 = features["robot_2_node"]
+        edge_coop = features["coop_edges"]
+
+        coop_cost = features['coop_edge_cost']
+        coop_mask = features["coop_edge_mask"]
+        ###############################
+        edge_coop = edge_coop.reshape(
+            (-1, self.mask_dim ** 2, self.feature_dim))
+        f_r1 = th.unsqueeze(f_r1, -2).repeat(1, 1, self.mask_dim, 1).reshape(
+            (-1, self.mask_dim ** 2, self.feature_dim))
+        f_r2 = th.unsqueeze(f_r2, -3).repeat(1, self.mask_dim, 1, 1).reshape(
+            (-1, self.mask_dim ** 2, self.feature_dim))
+
+        ############ cat or add #############
+        f = th.cat([f_r1, f_r2, edge_coop], dim=-1)
+
+        c_mask = coop_mask.reshape(
+            (-1, self.mask_dim ** 2, 1))
+        c_cost = coop_cost.reshape(
+            (-1, self.mask_dim ** 2, 1))
+
+        # print(f.shape, c_mask.shape)
+        # print(f_r1.shape, edge_r1.shape, mask1.shape)
+        return f, c_mask, c_cost
+#####################################################################################3
+# custom net 2020 : only coop edges obs
+class CustomNetwork_OnlyCoopEdges(CustomNetwork_0220):
+    def setup(self):
+        ##########################################33
+        self.action_decoder_1 = MultiHeadAttention(self.feature_dim, self.head_num, self.feature_dim)
+        self.action_decoder_2 = MultiHeadAttention(self.feature_dim, self.head_num, 16)
+
+        self.policy_net = nn.Linear(16, 1)
+
+        self.value_net_1 = nn.Linear(16, 4)
+        self.value_net_2 = nn.Sequential(
+            nn.Linear(self.mask_dim ** 2 * 4, self.latent_dim_vf)
+        )
+
+    def encode(self, features):
+        edge_coop = features["coop_edges"]
+
+        coop_cost = features['coop_edge_cost']
+        coop_mask = features["coop_edge_mask"]
+        ###############################
+        f = edge_coop.reshape(
+            (-1, self.mask_dim ** 2, self.feature_dim))
+
+        c_mask = coop_mask.reshape(
+            (-1, self.mask_dim ** 2, 1))
+        c_cost = coop_cost.reshape(
+            (-1, self.mask_dim ** 2, 1))
+
+        # print(f.shape, c_mask.shape)
+        # print(f_r1.shape, edge_r1.shape, mask1.shape)
+        return f, c_mask, c_cost
+
+#####################################################################################3
+# custom net flatten
+class CustomNetwork_Flatten(CustomNetwork_0220):
+
+    def setup(self):
+        self.robot1_node_encoder = nn.Linear(self.feature_dim, 16)
+
+        self.robot2_node_encoder = nn.Linear(self.feature_dim, 16)
+
+        self.task_edge1_encoder = nn.Linear(self.feature_dim, 4)
+        self.task_edge2_encoder = nn.Linear(self.feature_dim, 4)
+        self.coop_edge_encoder = nn.Linear(self.feature_dim, 8)
+
+        ##########################################33
+        self.decode_dim = 16 * (self.mask_dim * 2) + 16 * (self.mask_dim ** 2)
+
+        self.action_decoder_1 = nn.Linear(self.decode_dim, self.feature_dim)
+        self.action_decoder_2 = nn.Linear(self.feature_dim, self.feature_dim)
+
+        self.policy_net = nn.Linear(self.feature_dim, self.mask_dim ** 2)
+
+        self.value_net = nn.Linear(self.feature_dim, self.latent_dim_vf)
+
+    def encode(self, features):
+        f_r1 = features["robot_1_node"]
+        f_r2 = features["robot_2_node"]
+        edge_r1 = features["robot_1_task_edges"]
+        edge_r2 = features["robot_2_task_edges"]
+        edge_coop = features["coop_edges"]
+
+        coop_cost = features['coop_edge_cost']
+        coop_mask = features["coop_edge_mask"]
+        ###############################
+        f_r1 = self.robot1_node_encoder(f_r1).reshape((-1, self.mask_dim * 16))
+        f_r2 = self.robot2_node_encoder(f_r2).reshape((-1, self.mask_dim * 16))
+        f_t1 = self.task_edge1_encoder(edge_r1).reshape((-1, self.mask_dim ** 2 * 4))
+        f_t2 = self.task_edge1_encoder(edge_r2).reshape((-1, self.mask_dim ** 2 * 4))
+        f_c = self.coop_edge_encoder(edge_coop).reshape((-1, self.mask_dim ** 2 * 8))
+        #############################
+        # print(f_r1.shape, f_r2.shape, f_t1.shape, f_t2.shape,f_c.shape)
+        f = th.cat([f_r1, f_r2, f_t1, f_t2, f_c], dim=-1)
+        #########################
+        c_mask = coop_mask.reshape(
+            (-1, self.mask_dim ** 2, 1))
+        c_cost = coop_cost.reshape(
+            (-1, self.mask_dim ** 2, 1))
+
+        # print(f.shape, c_mask.shape)
+        # print(f_r1.shape, edge_r1.shape, mask1.shape)
+        return f, c_mask, c_cost
+    def decode(self, features, mask, cost):
+        features = self.action_decoder_1(features)
+        features = self.action_decoder_2(features)
+        return features
+
+    def calcul_action(self, features, mask, cost):
+        action = self.policy_net(features)
+        mask = th.flatten(mask, -2, -1)
+        masked_action = F.softmax(action.masked_fill(mask == 0, -1e9), dim=-1)
+        return masked_action
+
+    def calcul_critic(self, features):
+        return self.value_net(features)
+
+#####################################################################################3
+# custom net 2020 : upgrade output
+class CustomNetwork_UpgradeOutput(CustomNetwork_0220):
+    def setup(self):
+        self.robot1_node_encoder_1 = MultiHeadAttentionWithEdge(self.feature_dim, self.head_num, self.feature_dim)
+        self.robot1_node_encoder_2 = MultiHeadAttentionWithEdge(self.feature_dim, self.head_num, self.feature_dim)
+        # self.robot1_task_edge_encoder_1 = nn.Linear(self.feature_dim * 3, self.feature_dim)
+
+        self.robot2_node_encoder_1 = MultiHeadAttentionWithEdge(self.feature_dim, self.head_num, self.feature_dim)
+        self.robot2_node_encoder_2 = MultiHeadAttentionWithEdge(self.feature_dim, self.head_num, self.feature_dim)
+        # self.robot2_task_edge_encoder_1 = nn.Linear(self.feature_dim * 3, self.feature_dim)
+
+        ##########################################33
+        self.action_decoder_1 = MultiHeadAttention(self.feature_dim * 3, self.head_num, self.feature_dim)
+        # self.action_decoder_1 = MultiHeadAttention(self.feature_dim , self.head_num, self.feature_dim)
+        ####################################
+
+        self.action_decoder_2 = MultiHeadAttention(self.feature_dim, self.head_num, 16)
+
+        self.policy_net = MultiHeadAttention(16, 1, 1, activation=None)
+
+        self.value_net_1 = nn.Linear(16, 4)
+        self.value_net_2 = nn.Sequential(
+            nn.Linear(self.mask_dim ** 2 * 4, self.latent_dim_vf)
+        )
+    def calcul_action(self, features, mask, cost):
+        action = th.flatten(self.policy_net(features, features, features), -2, -1)
+        mask = th.flatten(mask, -2, -1)
+        cost = th.flatten(cost, -2, -1)
+
+        action = action - cost
+        # action = F.tanh(action - cost)
+        # print(action.shape, mask.shape)
+        masked_action = F.softmax(action.masked_fill(mask == 0, -1e9), dim=-1)
+        return masked_action
+
+#####################################################################################3
+# custom net 2020 add : replace cat with add
+class CustomNetwork_2020_Add_MinusCost(CustomNetwork_0220):
+    def setup(self):
+        self.robot1_node_encoder_1 = MultiHeadAttentionWithEdge(self.feature_dim, self.head_num, self.feature_dim)
+        self.robot1_node_encoder_2 = MultiHeadAttentionWithEdge(self.feature_dim, self.head_num, self.feature_dim)
+        # self.robot1_task_edge_encoder_1 = nn.Linear(self.feature_dim * 3, self.feature_dim)
+
+        self.robot2_node_encoder_1 = MultiHeadAttentionWithEdge(self.feature_dim, self.head_num, self.feature_dim)
+        self.robot2_node_encoder_2 = MultiHeadAttentionWithEdge(self.feature_dim, self.head_num, self.feature_dim)
+        # self.robot2_task_edge_encoder_1 = nn.Linear(self.feature_dim * 3, self.feature_dim)
+
+        ##########################################33
+        self.action_decoder_1 = MultiHeadAttention(self.feature_dim, self.head_num, self.feature_dim)
+        # self.action_decoder_1 = MultiHeadAttention(self.feature_dim , self.head_num, self.feature_dim)
+        ####################################
+
+        self.action_decoder_2 = MultiHeadAttention(self.feature_dim, self.head_num, 16)
+
+        self.policy_net = nn.Linear(16, 1)
+
+        self.value_net_1 = nn.Linear(16, 4)
+        self.value_net_2 = nn.Sequential(
+            nn.Linear(self.mask_dim ** 2 * 4, self.latent_dim_vf)
+        )
+
+    def encode(self, features):
+        f_r1 = features["robot_1_node"]
+        f_r2 = features["robot_2_node"]
+        # return f_r1, f_r2
+
+        edge_r1 = features["robot_1_task_edges"]
+        edge_r2 = features["robot_2_task_edges"]
+
+        mask1 = features["robot_1_task_edge_mask"]
+        mask2 = features["robot_2_task_edge_mask"]
+
+        edge_coop = features["coop_edges"]
+
+        coop_cost = features['coop_edge_cost']
+        coop_mask = features["coop_edge_mask"]
+
+        ###############################
+        f_r1 = self.robot1_node_encoder_1(f_r1, edge_r1, f_r1, mask=mask1)
+        f_r1 = self.robot1_node_encoder_2(f_r1, edge_r1, f_r1, mask=mask1)
+
+        f_r2 = self.robot2_node_encoder_1(f_r2, edge_r2, f_r2, mask=mask2)
+        f_r2 = self.robot2_node_encoder_2(f_r2, edge_r2, f_r2, mask=mask2)
+        ###############################
+        edge_coop = edge_coop.reshape(
+            (-1, self.mask_dim ** 2, self.feature_dim))
+        f_r1 = th.unsqueeze(f_r1, -2).repeat(1, 1, self.mask_dim, 1).reshape(
+            (-1, self.mask_dim ** 2, self.feature_dim))
+        f_r2 = th.unsqueeze(f_r2, -3).repeat(1, self.mask_dim, 1, 1).reshape(
+            (-1, self.mask_dim ** 2, self.feature_dim))
+
+        ############ cat or add #############
+        # f = th.cat([f_r1, f_r2, edge_coop], dim=-1)
+        f = f_r1 + f_r2 + edge_coop
+        ############ cat or add #############
+        c_mask = coop_mask.reshape(
+            (-1, self.mask_dim ** 2, 1))
+
+        c_cost = coop_cost.reshape(
+            (-1, self.mask_dim ** 2, 1))
+        # print(f.shape, c_mask.shape)
+        # print(f_r1.shape, edge_r1.shape, mask1.shape)
+        return f, c_mask, c_cost
+
+    def calcul_action(self, features, mask, cost):
+        action = th.flatten(self.policy_net(features, features, features), -2, -1)
+        mask = th.flatten(mask, -2, -1)
+        cost = th.flatten(cost, -2, -1)
+
+        action = action - cost
+        # action = F.tanh(action - cost)
+        # print(action.shape, mask.shape)
+        masked_action = F.softmax(action.masked_fill(mask == 0, -1e9), dim=-1)
+        return masked_action
+#####################################################################################3

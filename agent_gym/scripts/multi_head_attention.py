@@ -746,7 +746,8 @@ class MultiHeadSelfCrossAttentionWithNodeAndEdge3(MultiHeadSelfCrossAttention):
 
 
 
-class MultiHeadAttention2(nn.Module):
+
+class MultiHeadAttentionResBlock(nn.Module):
 
     def __init__(self,
                  in_features,
@@ -761,7 +762,7 @@ class MultiHeadAttention2(nn.Module):
         :param bias: Whether to use the bias term.
         :param activation: The activation after each linear transformation.
         """
-        super(MultiHeadAttention2, self).__init__()
+        super(MultiHeadAttention, self).__init__()
         if in_features % head_num != 0:
             raise ValueError(
                 '`in_features`({}) should be divisible by `head_num`({})'.format(in_features, head_num))
@@ -770,13 +771,13 @@ class MultiHeadAttention2(nn.Module):
         self.head_num = head_num
         self.activation = activation
         self.bias = bias
-        self.linear_q = nn.Linear(in_features, output_dim, bias)
-        self.linear_k = nn.Linear(in_features, output_dim, bias)
-        self.linear_v = nn.Linear(in_features, output_dim//2, bias)
-        # self.linear_o = nn.Linear(in_features * 2, output_dim, bias)
+        self.linear_q = nn.Linear(in_features, in_features, bias)
+        self.linear_k = nn.Linear(in_features, in_features, bias)
+        self.linear_v = nn.Linear(in_features, output_dim, bias)
+        self.linear_o = nn.Linear(in_features, output_dim, bias)
 
-    def forward(self, q, k, v, mask=None):
-        q, k, v = self.linear_q(q), self.linear_k(k), self.linear_v(v)
+    def forward(self, q, k, v0, mask=None):
+        q, k, v = self.linear_q(q), self.linear_k(k), self.linear_v(v0)
         if self.activation is not None:
             q = self.activation(q)
             k = self.activation(k)
@@ -793,9 +794,10 @@ class MultiHeadAttention2(nn.Module):
         v = self._reshape_from_batches(v)
         # print("$$$$$$$$$$$$$$$$$$$$$$$$")
         # print(q.shape, k.shape, v.shape, y.shape)
-        y = torch.cat([y, v], dim=-1)
+        y = self.linear_o(y)
+        y = y + v0
 
-        # y = self.linear_o(y)
+
         if self.activation is not None:
             y = self.activation(y)
         return y
